@@ -1,0 +1,11 @@
+# Core dependencies, shared by the local Mac and AutoDL.
+# torch and transformers are pinned to what vllm==0.31.0 accepts (requirements-gpu.txt),
+# so code tested locally runs unchanged on the GPU machine.
+# Exact versions of everything are recorded per machine in requirements-lock-*.txt.
+torch==2.13.0
+transformers==5.17.0
+datasets
+math-verify[antlr4_13_2]==0.9.0
+pandas
+pyyaml
+pytest

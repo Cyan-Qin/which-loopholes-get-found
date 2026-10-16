@@ -1,0 +1,6 @@
+# GPU stack for AutoDL (Linux, CUDA). vllm 0.31.0 pins torch==2.13.0 and transformers<5.18;
+# trl 1.15.0 supports vllm<=0.31.0. scripts/setup_autodl.sh installs this file.
+-r requirements.txt
+vllm==0.31.0
+trl==1.15.0
+accelerate

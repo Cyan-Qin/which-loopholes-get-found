@@ -1,0 +1,6 @@
+.venv/
+/data/
+/runs/
+*.safetensors
+.DS_Store
+__pycache__/

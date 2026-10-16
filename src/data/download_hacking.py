@@ -1,7 +1,7 @@
 """Download the hacking set released with Huang et al. [1] and check it against HANDOFF.md.
 
 Usage:
-    .venv/bin/python -I src/data/download_hacking.py
+    .venv/bin/python -m src.data.download_hacking    (from the repository root)
 
 Saves data/raw/hacking/hacking_data.parquet and prints a summary.
 """

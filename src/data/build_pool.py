@@ -8,7 +8,7 @@ Sources: DeepScaleR-Preview and the MATH training split. Steps:
   5. drop problems whose policy prompt exceeds prompt.max_prompt_tokens.
 
 Usage:
-    .venv/bin/python -I src/data/build_pool.py
+    .venv/bin/python -m src.data.build_pool    (from the repository root)
 
 Reads configs/data.yaml. Writes data/processed/pool_candidates.jsonl and
 data/processed/pool_summary.json. The split into easy and hard pools needs
@@ -26,6 +26,8 @@ import yaml
 from huggingface_hub import hf_hub_download
 from transformers import AutoTokenizer
 
+from src.gold.checker import last_boxed
+
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "data" / "processed"
@@ -36,25 +38,6 @@ INT_RE = re.compile(r"-?\d+")
 
 def fetch(repo_id, filename, subdir):
     return hf_hub_download(repo_id, filename, repo_type="dataset", local_dir=RAW / subdir)
-
-
-def last_boxed(text):
-    """Content of the last \\boxed{...} in text, with nested braces handled; None if absent."""
-    start = text.rfind("\\boxed")
-    if start < 0:
-        return None
-    i = text.find("{", start)
-    if i < 0:
-        return None
-    depth = 0
-    for j in range(i, len(text)):
-        if text[j] == "{":
-            depth += 1
-        elif text[j] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[i + 1 : j]
-    return None
 
 
 def normalize_int(answer):

@@ -1,0 +1,85 @@
+# Judges: model, prompt template, decoding and verdict parser.
+# A judge is the whole tuple; it is frozen with the protocol after the pilot.
+# Templates and parsers live in src/judges/prompts.py and src/judges/parse.py.
+#
+# Sources for the native formats:
+#   huang_*          Huang et al. [1], Appendix E, Figure 7 (verdict in \boxed{1} / \boxed{0}).
+#                    [1] used the prompt without the question for untrained verifiers and the
+#                    prompt with the question for its trained R1-Distill-Verifier.
+#   general_verifier TIGER-Lab/general-verifier model card ("Final Decision: Yes/No").
+#   xverify          IAAR-Shanghai/xVerify repo, src/xVerify/prompts/judge_prompt.py.
+# Decoding follows [1]: greedy, except R1-style long-CoT judges at temperature 0.6, top-p 0.95.
+
+# What every judge receives as the student's answer, during the audit and during GRPO alike.
+# deviation: HANDOFF suggested putting the question in every prompt. We keep each judge's
+# native prompt instead, so our false positive rates can be checked against those of [1].
+answer_input:
+  rule: last_boxed_else_tail   # content of the last \boxed{} if non-empty, else the response tail
+  tail_chars: 1000             # long enough for a 1000-character gibberish string
+
+judges:
+  r1_distill_verifier_1p5b:
+    model: hkust-nlp/R1-Distill-Verifier-1.5B
+    role: positive_control
+    template: huang_with_question
+    chat_template: true
+    reasoning: true            # verdict is read after </think>; unfinished thinking = parse failure
+    parser: boxed01
+    temperature: 0.6
+    top_p: 0.95
+    max_new_tokens: 2048       # to be checked in the pilot against the truncation rate
+
+  r1_distill_qwen_1p5b:
+    model: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+    role: core
+    template: huang_without_question
+    chat_template: true
+    reasoning: true
+    parser: boxed01
+    temperature: 0.6
+    top_p: 0.95
+    max_new_tokens: 2048
+
+  qwen2p5_math_1p5b_instruct:
+    model: Qwen/Qwen2.5-Math-1.5B-Instruct
+    role: core
+    template: huang_without_question
+    chat_template: true
+    reasoning: false
+    parser: boxed01
+    temperature: 0.0
+    top_p: 1.0
+    max_new_tokens: 1024
+
+  xverify_0p5b:
+    model: IAAR-Shanghai/xVerify-0.5B-I
+    role: negative_control
+    template: xverify
+    chat_template: true
+    reasoning: false
+    parser: xverify
+    temperature: 0.0
+    top_p: 1.0
+    max_new_tokens: 16         # the answer is one word
+
+  general_verifier:
+    model: TIGER-Lab/general-verifier
+    role: held_out
+    template: general_verifier
+    chat_template: false       # the model card uses a plain "User: ... Assistant:" prompt
+    reasoning: false
+    parser: final_decision
+    temperature: 0.0
+    top_p: 1.0
+    max_new_tokens: 1024
+
+  qwen2p5_7b_instruct:
+    model: Qwen/Qwen2.5-7B-Instruct
+    role: held_out
+    template: huang_without_question
+    chat_template: true
+    reasoning: false
+    parser: boxed01
+    temperature: 0.0
+    top_p: 1.0
+    max_new_tokens: 1024

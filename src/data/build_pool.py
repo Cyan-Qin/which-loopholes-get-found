@@ -27,6 +27,7 @@ from huggingface_hub import hf_hub_download
 from transformers import AutoTokenizer
 
 from src.gold.checker import last_boxed
+from src.policy.prompt import build_prompt
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "data" / "raw"
@@ -94,10 +95,7 @@ def load_exclusions():
 def prompt_lengths(problems, cfg):
     """Token count of each problem as a full policy prompt (chat template included)."""
     tok = AutoTokenizer.from_pretrained(cfg["model"])
-    messages = [[{"role": "user", "content": p + cfg["suffix"]}] for p in problems]
-    if cfg["system"] is not None:
-        messages = [[{"role": "system", "content": cfg["system"]}] + m for m in messages]
-    texts = [tok.apply_chat_template(m, tokenize=False, add_generation_prompt=True) for m in messages]
+    texts = [build_prompt(p, tok, cfg) for p in problems]
     return [len(ids) for ids in tok(texts, add_special_tokens=False)["input_ids"]]
 
 

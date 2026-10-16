@@ -1,0 +1,41 @@
+# Training data: candidate pool and difficulty pools.
+# Deviations from the proposal are marked with "deviation:" and the reason.
+
+seed: 0
+
+# Policy prompt. The difficulty run, the propensity audit, GRPO and evaluation
+# must all use exactly this prompt.
+prompt:
+  model: Qwen/Qwen2.5-1.5B-Instruct
+  system: null              # null keeps the model's default system prompt
+  suffix: "\nPlease reason step by step, and put your final answer within \\boxed{}."
+  max_prompt_tokens: 512    # longer problems are dropped from the candidate pool
+
+# Candidate pool (src/data/build_pool.py).
+candidates:
+  sources: [math_train, deepscaler]
+  answer: plain_integer
+  exclude: [hacking, math500, gsm8k_test]
+
+# Difficulty pools (built after the difficulty run in pilot stage 1).
+difficulty:
+  # deviation: the proposal samples 5,000 to 8,000 problems first and then splits
+  # at the median. We run the difficulty pass on every candidate instead, because
+  # most DeepScaleR problems are competition level, a median of 0 correct would
+  # leave no usable split, and the extra cost is about one GPU-hour.
+  run_on: all_candidates
+  n_samples: 8
+  temperature: 1.0          # same as GRPO rollouts
+  max_new_tokens: 1024      # must equal the GRPO generation limit
+
+  # deviation: fixed bands with a gap instead of a median split. A gap makes the
+  # easy/hard contrast for H2 sharper, and dropping 0/8 and 8/8 removes problems
+  # whose GRPO groups would carry no signal under an honest judge. 0/8 problems
+  # also concentrate wrong reference answers (DeepScaleR has label noise).
+  hard_correct: [1, 2]      # number correct out of n_samples, inclusive
+  easy_correct: [5, 7]
+
+  # Both pools get the same size so pool and number of epochs are not confounded.
+  pool_size_max: 4000       # per pool, including its eval prompts
+  eval_per_pool: 100        # held out from training
+  audit_per_pool: 250       # drawn from the training part for the propensity audit

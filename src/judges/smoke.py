@@ -1,23 +1,28 @@
-"""Smoke test of one judge on a few hacking answers and normal answers.
+"""Smoke test of judges on a few hacking answers and normal answers.
 
 Usage:
-    .venv/bin/python -m src.judges.smoke [judge_name] [per_family]
+    python -m src.judges.smoke [--judges xverify_0p5b | name1,name2 | all]
+                               [--per-family 2] [--backend local|vllm]
 
-Defaults to xverify_0p5b with 2 hacking answers per family. Uses questions whose
-reference answer is an integer. Gibberish rows use real random gibberish.
-This is a check that prompts, generation and parsing work end to end, not an
-estimate of false positive rates.
+Uses questions whose reference answer is an integer; gibberish rows use real
+random gibberish. With the vLLM backend each judge runs in its own process so
+GPU memory is fully released between judges, and a summary table follows.
+This checks that prompts, generation and parsing work end to end; it does not
+estimate false positive rates.
 """
 
+import argparse
+import json
 import random
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pandas as pd
 
 from src.detectors.synthetic import random_gibberish
-from src.judges.local import LocalJudge
-from src.judges.prompts import judge_config
+from src.judges.prompts import judge_config, load_config
 
 ROOT = Path(__file__).resolve().parents[2]
 HACKING = ROOT / "data" / "raw" / "hacking" / "hacking_data.parquet"
@@ -44,29 +49,66 @@ def build_items(per_family, seed=0):
     return items
 
 
-def main():
-    name = sys.argv[1] if len(sys.argv) > 1 else "xverify_0p5b"
-    per_family = int(sys.argv[2]) if len(sys.argv) > 2 else 2
+def run_one(name, per_family, backend):
     cfg = judge_config(name)
-    judge = LocalJudge(cfg)
-    print(f"judge {name} ({cfg['model']}) on {judge.device}")
+    if backend == "vllm":
+        from src.judges.vllm_judge import VLLMJudge
+        judge, where = VLLMJudge(cfg), "vllm"
+    else:
+        from src.judges.local import LocalJudge
+        judge = LocalJudge(cfg)
+        where = judge.device
+    print(f"judge {name} ({cfg['model']}) on {where}", flush=True)
     items = build_items(per_family)
     results, seconds = judge.judge(items)
 
     rows = []
     for it, r in zip(items, results):
         rows.append({"kind": it["kind"], "should_accept": it["should_accept"], "accepted": r.accepted,
-                     "parse_fail": r.parse_fail, "label": r.label, "answer": r.answer[:40],
-                     "output": r.output.strip().replace("\n", " ")[:60]})
+                     "parse_fail": r.parse_fail, "label": r.label, "tokens": r.n_tokens, "truncated": r.truncated,
+                     "answer": r.answer[:30], "output": r.output.strip().replace("\n", " ")[-50:]})
     df = pd.DataFrame(rows)
-    with pd.option_context("display.width", 200, "display.max_colwidth", 60):
+    with pd.option_context("display.width", 220, "display.max_colwidth", 50):
         print(df.to_string(index=False))
     hack = df[~df["kind"].str.startswith("normal")]
     normal = df[df["kind"].str.startswith("normal")]
-    print(f"\n{len(df)} items in {seconds:.1f}s ({seconds / len(df):.2f}s each)")
-    print(f"parse failures: {df['parse_fail'].sum()}")
-    print(f"hacking answers accepted (false positives): {hack['accepted'].sum()} / {len(hack)}")
-    print(f"normal answers judged as expected: {(normal['accepted'] == normal['should_accept']).sum()} / {len(normal)}")
+    summary = {
+        "judge": name, "items": len(df), "s_per_item": round(seconds / len(df), 3),
+        "parse_fail": int(df["parse_fail"].sum()), "truncated": int(df["truncated"].sum()),
+        "mean_tokens": round(float(df["tokens"].mean()), 1),
+        "hack_accepted": f"{int(hack['accepted'].sum())}/{len(hack)}",
+        "normal_ok": f"{int((normal['accepted'] == normal['should_accept']).sum())}/{len(normal)}",
+    }
+    print(f"\n{json.dumps(summary)}", flush=True)
+    return summary
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--judges", default="xverify_0p5b", help="comma-separated names, or all")
+    ap.add_argument("--per-family", type=int, default=2)
+    ap.add_argument("--backend", choices=["local", "vllm"], default="local")
+    ap.add_argument("--summary-out", default=None, help=argparse.SUPPRESS)
+    args = ap.parse_args()
+    names = list(load_config()["judges"]) if args.judges == "all" else args.judges.split(",")
+
+    if len(names) == 1:
+        summary = run_one(names[0], args.per_family, args.backend)
+        if args.summary_out:
+            Path(args.summary_out).write_text(json.dumps(summary))
+        return
+
+    summaries = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in names:
+            out = Path(tmp) / f"{name}.json"
+            cmd = [sys.executable, "-m", "src.judges.smoke", "--judges", name, "--per-family",
+                   str(args.per_family), "--backend", args.backend, "--summary-out", str(out)]
+            code = subprocess.run(cmd).returncode
+            summaries.append(json.loads(out.read_text()) if out.exists() else {"judge": name, "error": f"exit {code}"})
+    print("\n== summary")
+    with pd.option_context("display.width", 220):
+        print(pd.DataFrame(summaries).to_string(index=False))
 
 
 if __name__ == "__main__":

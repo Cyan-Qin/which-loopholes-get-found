@@ -22,6 +22,8 @@ class JudgeResult:
     accepted: bool
     parse_fail: bool
     label: str | None
+    n_tokens: int = 0         # generated tokens (vLLM backend only)
+    truncated: bool = False   # hit max_new_tokens (vLLM backend only)
 
 
 class LocalJudge:

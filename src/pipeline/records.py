@@ -1,9 +1,12 @@
-"""Record format for every judged policy output, plus run metadata.
+"""Record formats for policy outputs, plus run metadata.
 
-One JSONL line per (policy response, judge). The same format serves the
-propensity audit, static-accuracy measurement and GRPO evaluation, so every
-analysis reads one kind of file. Raw responses and raw judge outputs are kept
-in full so any label can be re-derived or hand-audited later.
+Two kinds of JSONL lines:
+  sample record  one policy response with its gold label and detected family
+                 (difficulty run, propensity audit)
+  judge record   a sample record plus one judge's verdict, one line per
+                 (response, judge) (static accuracy, judge audit, GRPO evaluation)
+Raw responses and raw judge outputs are kept in full so any label can be
+re-derived or hand-audited later.
 
 Derived fields:
   false_positive  judge accepted a response that the gold checker marks wrong
@@ -13,68 +16,88 @@ Derived fields:
 
 import json
 import platform
-from importlib import metadata
 import subprocess
+from importlib import metadata
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2   # 2: adds request_seed and separate sample records
 ROOT = Path(__file__).resolve().parents[2]
 
-FIELDS = {
+SAMPLE_FIELDS = {
     "schema_version": int, "run_id": str, "stage": str, "step": (int, type(None)),
-    "uid": str, "source": str, "reference": str, "sample_idx": int,
+    "uid": str, "source": str, "reference": str, "sample_idx": int, "request_seed": (int, type(None)),
     "policy_model": str, "response": str, "n_tokens": int, "truncated": bool,
     "gold_correct": bool, "gold_extracted": (str, type(None)), "no_answer": bool, "n_boxed": int,
     "family": (str, type(None)), "contains": list,
+}
+JUDGE_FIELDS = {
     "judge": str, "judge_answer": str, "judge_output": str, "accepted": bool, "parse_fail": bool,
     "judge_label": (str, type(None)),
     "false_positive": bool, "exploit": bool,
 }
+FIELDS = {**SAMPLE_FIELDS, **JUDGE_FIELDS}
 
 
-def make_record(*, run_id, stage, step, item, sample_idx, policy_model, sample, gold, detection,
-                judge_name, verdict):
-    false_positive = verdict.accepted and not gold.correct
+def make_sample_record(*, run_id, stage, step, item, sample_idx, policy_model, sample, gold, detection,
+                       request_seed=None):
     return {
         "schema_version": SCHEMA_VERSION, "run_id": run_id, "stage": stage, "step": step,
         "uid": item["uid"], "source": item["source"], "reference": item["reference"], "sample_idx": sample_idx,
-        "policy_model": policy_model, "response": sample.text, "n_tokens": sample.n_tokens,
-        "truncated": sample.truncated,
+        "request_seed": request_seed, "policy_model": policy_model, "response": sample.text,
+        "n_tokens": sample.n_tokens, "truncated": sample.truncated,
         "gold_correct": gold.correct, "gold_extracted": gold.extracted, "no_answer": gold.no_answer,
         "n_boxed": gold.n_boxed,
         "family": detection.family, "contains": sorted(detection.contains),
-        "judge": judge_name, "judge_answer": verdict.answer, "judge_output": verdict.output,
-        "accepted": verdict.accepted, "parse_fail": verdict.parse_fail, "judge_label": verdict.label,
-        "false_positive": false_positive, "exploit": false_positive and detection.family is not None,
     }
 
 
-def validate_record(r):
-    """Raise ValueError if a record is missing a field, has a wrong type or inconsistent flags."""
-    missing = set(FIELDS) - set(r)
-    extra = set(r) - set(FIELDS)
+def make_record(*, judge_name, verdict, **sample_kwargs):
+    """Judge record: the sample record of a response plus one judge's verdict."""
+    r = make_sample_record(**sample_kwargs)
+    false_positive = verdict.accepted and not r["gold_correct"]
+    r.update({
+        "judge": judge_name, "judge_answer": verdict.answer, "judge_output": verdict.output,
+        "accepted": verdict.accepted, "parse_fail": verdict.parse_fail, "judge_label": verdict.label,
+        "false_positive": false_positive, "exploit": false_positive and r["family"] is not None,
+    })
+    return r
+
+
+def _check_fields(r, fields):
+    missing = set(fields) - set(r)
+    extra = set(r) - set(fields)
     if missing or extra:
         raise ValueError(f"missing {sorted(missing)}, unexpected {sorted(extra)}")
-    for key, typ in FIELDS.items():
+    for key, typ in fields.items():
         if not isinstance(r[key], typ) or (typ is int and isinstance(r[key], bool)):
             raise ValueError(f"{key} has type {type(r[key]).__name__}")
+    if r["family"] is not None and r["family"] not in r["contains"]:
+        raise ValueError("primary family missing from contains")
+
+
+def validate_sample_record(r):
+    """Raise ValueError if a sample record is malformed."""
+    _check_fields(r, SAMPLE_FIELDS)
+
+
+def validate_record(r):
+    """Raise ValueError if a judge record is malformed or its flags are inconsistent."""
+    _check_fields(r, FIELDS)
     if r["false_positive"] != (r["accepted"] and not r["gold_correct"]):
         raise ValueError("false_positive inconsistent")
     if r["exploit"] != (r["false_positive"] and r["family"] is not None):
         raise ValueError("exploit inconsistent")
     if r["parse_fail"] and r["accepted"]:
         raise ValueError("a parse failure cannot be accepted")
-    if r["family"] is not None and r["family"] not in r["contains"]:
-        raise ValueError("primary family missing from contains")
 
 
-def write_jsonl(path, records):
+def write_jsonl(path, records, validate=validate_record):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         for r in records:
-            validate_record(r)
+            validate(r)
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
@@ -99,7 +122,7 @@ def package_versions(names=("torch", "transformers", "datasets", "math-verify", 
     return found
 
 
-def write_meta(run_dir, **extra):
+def write_meta(run_dir, name="meta.json", **extra):
     """Run metadata: time, git state, configs and library versions, next to the records."""
     meta = {
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -110,5 +133,5 @@ def write_meta(run_dir, **extra):
     }
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    (run_dir / name).write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     return meta

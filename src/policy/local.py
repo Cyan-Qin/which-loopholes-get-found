@@ -33,12 +33,17 @@ class LocalPolicy:
         self.pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else min(self.eos_ids)
 
     @torch.inference_mode()
-    def sample(self, problems, n, temperature, top_p, max_new_tokens, seed):
-        """n samples per problem. Returns a list (per problem) of lists of Samples, and seconds."""
+    def sample(self, problems, n, temperature, top_p, max_new_tokens, seed, request_seeds=None):
+        """n samples per problem. Returns a list (per problem) of lists of Samples, and seconds.
+
+        With request_seeds, the random state is reset per problem (as in VLLMPolicy).
+        """
         torch.manual_seed(seed)
         start = time.time()
         results = []
-        for problem in problems:
+        for i, problem in enumerate(problems):
+            if request_seeds is not None:
+                torch.manual_seed(request_seeds[i])
             prompt = build_prompt(problem, self.tokenizer)
             inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.device)
             out = self.model.generate(**inputs, do_sample=True, temperature=temperature, top_p=top_p,

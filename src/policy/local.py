@@ -1,4 +1,4 @@
-"""Sample policy responses locally with Hugging Face transformers (CPU or Apple MPS).
+"""Sample policy responses locally with Hugging Face transformers (CUDA, Apple MPS or CPU).
 
 For smoke tests with small models. The difficulty run, the audit and GRPO
 use vLLM on the GPU with the same prompt (src/policy/prompt.py).
@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from src.device import default_device, default_dtype
 from src.policy.prompt import build_prompt
 
 
@@ -23,9 +24,9 @@ class Sample:
 class LocalPolicy:
     def __init__(self, model, device=None):
         self.model_name = model
-        self.device = device or ("mps" if torch.backends.mps.is_available() else "cpu")
+        self.device = device or default_device()
         self.tokenizer = AutoTokenizer.from_pretrained(model)
-        self.model = AutoModelForCausalLM.from_pretrained(model, dtype=torch.float16).to(self.device)
+        self.model = AutoModelForCausalLM.from_pretrained(model, dtype=default_dtype(self.device)).to(self.device)
         self.model.eval()
         eos = self.model.generation_config.eos_token_id
         self.eos_ids = set(eos if isinstance(eos, list) else [eos])

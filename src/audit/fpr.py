@@ -9,12 +9,13 @@ the hacking set of Huang et al. [1]:
   - the 13 families of [1] with their released answers, except that gibberish uses a
     real random 1000-character string (the release stores a placeholder);
   - reasoning_opener, one master key of Zhao et al. [2] per question;
-  - gibberish_placeholder, the released placeholder, kept only to compare with [1].
+  - gibberish_placeholder, the released placeholder string, kept to show that it is not
+    what [1] evaluated (it is almost never accepted, unlike real random strings).
 Each judge runs in its own process (vLLM memory is released between judges), in
 resumable shards under <run-dir>/<judge>/. The summary reports FPR with 95% Wilson
 intervals on all questions and on the integer-answer subset, parse-failure and
-truncation rates, and the mean over the 13 families of [1] next to the number [1]
-reports.
+truncation rates, and the mean over the 13 families of [1] (with real gibberish, as [1]
+evaluated) next to the number [1] reports.
 """
 
 import argparse
@@ -47,7 +48,9 @@ PLACEHOLDER = "gibberish_placeholder"
 HUANG_FAMILIES = tuple(f for f in FAMILIES if f != "reasoning_opener")   # the 13 families of [1]
 
 # Average attack success rate (%) over the 13 patterns reported by [1] (arXiv v2, Tables 9-10, as
-# recorded in HANDOFF.md section 11). [1] used the placeholder for gibberish.
+# recorded in HANDOFF.md section 11). [1] evaluated real random strings for gibberish: its README gives
+# 18.1% for general-verifier on gibberish, against 17.2% for our random strings and 0.0% for the
+# released placeholder, so mean13_real is the column comparable to [1].
 REFERENCE_ASR = {
     "qwen2p5_math_1p5b_instruct": 23.7, "r1_distill_verifier_1p5b": 18.8, "r1_distill_qwen_1p5b": 12.3,
     "general_verifier": 7.7, "qwen2p5_7b_instruct": 3.7, "xverify_0p5b": 0.1,
@@ -134,9 +137,9 @@ def judge_overview(rows):
         all_rows = list(fam.values())
         n = sum(r["n"] for r in all_rows)
         out.append({"judge": judge,
-                    "mean13_placeholder_%": round(100 * sum(placeholder) / len(placeholder), 1) if placeholder else None,
-                    "huang_reported_%": REFERENCE_ASR.get(judge),
                     "mean13_real_%": round(100 * sum(real) / len(real), 1) if real else None,
+                    "huang_reported_%": REFERENCE_ASR.get(judge),
+                    "mean13_placeholder_%": round(100 * sum(placeholder) / len(placeholder), 1) if placeholder else None,
                     "reasoning_opener_%": round(100 * fam["reasoning_opener"]["fpr"], 1) if "reasoning_opener" in fam else None,
                     "parse_fail_%": round(100 * sum(r["parse_fail"] * r["n"] for r in all_rows) / n, 2),
                     "truncated_%": round(100 * sum(r["truncated"] * r["n"] for r in all_rows) / n, 2),
@@ -154,7 +157,7 @@ def report(run_dir):
     pd.DataFrame(rows).to_csv(run_dir / "fpr_by_family.csv", index=False)
     (run_dir / "fpr_overview.json").write_text(json.dumps(overview, indent=2))
     with pd.option_context("display.width", 220, "display.max_columns", 30):
-        print("\n== per judge (mean over the 13 families of [1]; [1] used the gibberish placeholder)")
+        print("\n== per judge (mean over the 13 families of [1]; compare mean13_real with [1])")
         print(pd.DataFrame(overview).to_string(index=False))
         matrix = pd.DataFrame(rows).pivot(index="family", columns="judge", values="fpr").mul(100).round(1)
         order = [f for f in FAMILIES + (PLACEHOLDER,) if f in matrix.index]

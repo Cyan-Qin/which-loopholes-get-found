@@ -6,6 +6,7 @@ with the judge's decoding settings from configs/judges.yaml, parse the verdict.
 
 import time
 
+from src.device import configure_vllm
 from src.judges.local import JudgeResult
 from src.judges.parse import parse_verdict
 from src.judges.prompts import build_prompt, judge_answer
@@ -15,6 +16,7 @@ MAX_MODEL_LEN = 4096   # judge prompt (question + answer tail) plus up to 2048 g
 
 class VLLMJudge:
     def __init__(self, cfg, gpu_memory_utilization=0.9, seed=0, **llm_kwargs):
+        configure_vllm()
         from vllm import LLM
 
         self.cfg = cfg

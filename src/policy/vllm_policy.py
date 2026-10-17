@@ -10,12 +10,14 @@ import time
 
 from transformers import GenerationConfig
 
+from src.device import configure_vllm
 from src.policy.local import Sample
 from src.policy.prompt import build_prompt, prompt_config
 
 
 class VLLMPolicy:
     def __init__(self, model, max_new_tokens, gpu_memory_utilization=0.9, seed=0, **llm_kwargs):
+        configure_vllm()
         from vllm import LLM  # imported here so the rest of the package works without vLLM
 
         self.model_name = model

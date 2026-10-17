@@ -14,7 +14,8 @@ Labelers see the problem, the reference and the full response, never the gold
 verdict or the stratum. Items are split among labelers A, B and C, and `--shared`
 items go to all three for inter-rater agreement.
 
-Writes (blind, safe to share): audits/gold/gold_audit_sheet.csv and gold_audit.html.
+Writes (blind, safe to share): audits/gold/gold_audit_sheet.csv and gold_audit.html
+(rebuild the page alone with --html-from-csv audits/gold/gold_audit_sheet.csv).
 Writes (not for labelers): runs/gold-audit/key.csv and strata.json.
 """
 
@@ -105,25 +106,45 @@ def write_outputs(items, population, candidates, sheet_dir=SHEET_DIR, key_dir=KE
     (key_dir / "strata.json").write_text(json.dumps(
         {"population": population, "sampled": dict(Counter(it["stratum"] for it in items))}, indent=2))
 
+    rows = [{"audit_id": it["audit_id"], "assigned_to": it["assigned_to"],
+             "problem": candidates[it["record"]["uid"]]["problem"], "reference": it["record"]["reference"],
+             "response": it["record"]["response"]} for it in items]
+    (sheet_dir / "gold_audit.html").write_text(render_html(rows), encoding="utf-8")
+
+
+def render_html(rows):
+    """Readable page for labelers. Math in problems and responses is rendered with MathJax;
+    each response also keeps its raw text, in case the model's LaTeX renders misleadingly."""
     cards = []
-    for it in items:
-        r = it["record"]
+    for r in rows:
+        resp = html.escape(r["response"])
         cards.append(
-            f'<section><h2>{it["audit_id"]} <small>labeler {it["assigned_to"]}</small></h2>'
-            f'<h3>Problem</h3><div class="tex">{html.escape(candidates[r["uid"]]["problem"])}</div>'
+            f'<section><h2>{html.escape(r["audit_id"])} <small>labeler {html.escape(r["assigned_to"])}</small></h2>'
+            f'<h3>Problem</h3><div class="text">{html.escape(r["problem"])}</div>'
             f'<h3>Reference answer: <code>{html.escape(r["reference"])}</code></h3>'
-            f'<h3>Response</h3><pre>{html.escape(r["response"])}</pre></section>')
-    page = f"""<!doctype html><html><head><meta charset="utf-8"><title>Gold audit</title>
+            f'<h3>Response</h3><div class="text response">{resp}</div>'
+            f'<details><summary>raw text of the response</summary><pre>{resp}</pre></details></section>')
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Gold audit</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.MathJax = {{tex: {{inlineMath: [['$', '$'], ['\\\\(', '\\\\)']]}}}};</script>
+<script>window.MathJax = {{tex: {{inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+  displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']], processEscapes: true}}}};</script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
-<style>body{{font-family:system-ui,sans-serif;max-width:900px;margin:0 auto;padding:16px;line-height:1.5}}
+<style>body{{font-family:system-ui,sans-serif;max-width:900px;margin:0 auto;padding:16px;line-height:1.55}}
 section{{border:1px solid #ccc;border-radius:8px;padding:12px 16px;margin:16px 0}}
-pre{{white-space:pre-wrap;background:#f6f6f6;padding:8px;border-radius:6px}}h3{{margin:10px 0 4px}}</style>
-</head><body><h1>Gold checker hand audit ({len(items)} responses)</h1><p>{html.escape(INSTRUCTIONS)}</p>
+.text{{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto}}.response{{background:#f6f6f6;padding:8px;border-radius:6px}}
+pre{{white-space:pre-wrap;background:#fbfbfb;border:1px dashed #ccc;padding:8px;border-radius:6px}}
+h3{{margin:10px 0 4px}}summary{{cursor:pointer;color:#555;margin-top:6px}}
+mjx-container[display="true"]{{max-width:100%;overflow-x:auto;overflow-y:hidden}}</style>
+</head><body><h1>Gold checker hand audit ({len(rows)} responses)</h1><p>{html.escape(INSTRUCTIONS)}</p>
 <p>Record labels in gold_audit_sheet.csv (column "label"), one row per audit_id.</p>
 {''.join(cards)}</body></html>"""
-    (sheet_dir / "gold_audit.html").write_text(page, encoding="utf-8")
+
+
+def html_from_csv(csv_path, html_path):
+    with Path(csv_path).open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    Path(html_path).write_text(render_html(rows), encoding="utf-8")
+    return len(rows)
 
 
 def main():
@@ -132,7 +153,13 @@ def main():
     ap.add_argument("--difficulty-run", default="runs/difficulty")
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--shared", type=int, default=30, help="items labeled by all three labelers")
+    ap.add_argument("--html-from-csv", default=None,
+                    help="only rebuild the HTML page from an existing sheet (no difficulty run needed)")
     args = ap.parse_args()
+    if args.html_from_csv:
+        out = Path(args.html_from_csv).with_name("gold_audit.html")
+        print(f"wrote {display_path(out)} ({html_from_csv(args.html_from_csv, out)} responses)")
+        return
     records = read_shards(ROOT / args.difficulty_run / "samples")
     items, population = sample_items(records, args.n, args.shared, cfg["seed"])
     write_outputs(items, population, load_candidates())

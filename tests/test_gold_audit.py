@@ -93,3 +93,19 @@ def test_read_labels(tmp_path):
 def test_too_few_responses_overall():
     items, _ = sample_items(records()[:20], n=200, shared=5, seed=0)
     assert len(items) == 20                                         # cannot sample more than exist
+
+
+def test_html_renders_responses_and_keeps_raw(tmp_path):
+    from src.gold.audit_sheet import html_from_csv
+    path = tmp_path / "s.csv"
+    with path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["audit_id", "assigned_to", "problem", "reference", "response", "label (Y/N/?)", "labeler", "notes"])
+        w.writerow(["g001", "A", "Find $n$.", "6", "So \\( n = 6 \\) and <b>bold</b> \\boxed{6}", "", "", ""])
+    assert html_from_csv(path, tmp_path / "p.html") == 1
+    page = (tmp_path / "p.html").read_text()
+    assert '<div class="text response">So \\( n = 6 \\)' in page        # outside <pre>, so MathJax renders it
+    assert "<details><summary>raw text" in page and "<b>bold</b>" not in page
+    assert "displayMath" in page and "processEscapes: true" in page
+    # the JavaScript must receive \\( (a literal backslash-paren), or plain parentheses would start math
+    assert r"['\\(', '\\)']" in page and r"['\\[', '\\]']" in page

@@ -28,6 +28,7 @@ from pathlib import Path
 import yaml
 
 from src.data.difficulty import load_units, make_process
+from src.paths import display_path
 from src.pipeline.records import validate_sample_record
 from src.pipeline.shards import read_shards
 
@@ -172,7 +173,7 @@ def main():
             validate_sample_record(r)
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     print(f"\n== part 2: {len(batch)} problems re-sampled with max_new_tokens={args.max_new_tokens} "
-          f"in {timer['generate_seconds']:.0f}s (saved to {out.relative_to(ROOT)})")
+          f"in {timer['generate_seconds']:.0f}s (saved to {display_path(out)})")
     original = [r for r in records if r["uid"] in set(retry_uids)]
     print(json.dumps(compare(original, retried), indent=2))
     print_cap_table(retried)

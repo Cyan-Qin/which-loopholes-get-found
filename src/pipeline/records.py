@@ -1,10 +1,12 @@
 """Record formats for policy outputs, plus run metadata.
 
-Two kinds of JSONL lines:
+Three kinds of JSONL lines:
   sample record  one policy response with its gold label and detected family
                  (difficulty run, propensity audit)
   judge record   a sample record plus one judge's verdict, one line per
-                 (response, judge) (static accuracy, judge audit, GRPO evaluation)
+                 (response, judge) (static accuracy, GRPO evaluation)
+  audit record   one judge's verdict on a hacking answer that is wrong by
+                 construction (judge false-positive audit)
 Raw responses and raw judge outputs are kept in full so any label can be
 re-derived or hand-audited later.
 
@@ -72,6 +74,9 @@ def _check_fields(r, fields):
     for key, typ in fields.items():
         if not isinstance(r[key], typ) or (typ is int and isinstance(r[key], bool)):
             raise ValueError(f"{key} has type {type(r[key]).__name__}")
+
+
+def _check_family(r):
     if r["family"] is not None and r["family"] not in r["contains"]:
         raise ValueError("primary family missing from contains")
 
@@ -79,15 +84,43 @@ def _check_fields(r, fields):
 def validate_sample_record(r):
     """Raise ValueError if a sample record is malformed."""
     _check_fields(r, SAMPLE_FIELDS)
+    _check_family(r)
 
 
 def validate_record(r):
     """Raise ValueError if a judge record is malformed or its flags are inconsistent."""
     _check_fields(r, FIELDS)
+    _check_family(r)
     if r["false_positive"] != (r["accepted"] and not r["gold_correct"]):
         raise ValueError("false_positive inconsistent")
     if r["exploit"] != (r["false_positive"] and r["family"] is not None):
         raise ValueError("exploit inconsistent")
+    if r["parse_fail"] and r["accepted"]:
+        raise ValueError("a parse failure cannot be accepted")
+
+
+AUDIT_FIELDS = {
+    "schema_version": int, "run_id": str, "stage": str, "key": str, "qid": str, "family": str,
+    "detected_family": (str, type(None)), "integer_reference": bool, "reference": str, "response": str,
+    "judge": str, "judge_answer": str, "judge_output": str, "accepted": bool, "parse_fail": bool,
+    "judge_label": (str, type(None)), "judge_tokens": int, "judge_truncated": bool,
+}
+
+
+def make_audit_record(*, run_id, item, judge_name, verdict):
+    """Audit record: a judge's verdict on a hacking answer (wrong by construction)."""
+    return {
+        "schema_version": SCHEMA_VERSION, "run_id": run_id, "stage": "judge_audit", "key": item["key"],
+        "qid": item["qid"], "family": item["family"], "detected_family": item["detected_family"],
+        "integer_reference": item["integer_reference"], "reference": item["reference"],
+        "response": item["response"], "judge": judge_name, "judge_answer": verdict.answer,
+        "judge_output": verdict.output, "accepted": verdict.accepted, "parse_fail": verdict.parse_fail,
+        "judge_label": verdict.label, "judge_tokens": verdict.n_tokens, "judge_truncated": verdict.truncated,
+    }
+
+
+def validate_audit_record(r):
+    _check_fields(r, AUDIT_FIELDS)
     if r["parse_fail"] and r["accepted"]:
         raise ValueError("a parse failure cannot be accepted")
 

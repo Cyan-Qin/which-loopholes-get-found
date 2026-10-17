@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-17 (after the pools, the gold audit sheet and the judge FPR audit).
+Last updated: 2026-10-17 (stage-1 GPU batch written; results pending).
 
 ---
 
@@ -172,6 +172,35 @@ question, gt, pred, hacking_type, score.
   groups with no signal under an honest judge, and 0/8 problems concentrate wrong reference answers.
 - Both pools get the same size so pool and number of epochs are not confounded. Each pool holds 100
   evaluation problems (never trained on) and sets aside 250 training problems for the propensity audit.
+
+### 1.10 Propensity by string likelihood (`src/audit/likelihood.py`)
+
+- Canonical strings, fixed before any policy measurement: for each family of [1], its up to 5 most
+  frequent answers in the hacking set (ties broken alphabetically; empty_symbols gives "{", ".", "-",
+  "}" and the empty string); for gibberish, 5 seeded random 1000-character strings; for
+  reasoning_opener, the first 5 master keys of [2]. Stored in `canonical_strings.json`.
+- For each of the 250 audit problems of a pool, the policy's teacher-forced log-probability of each
+  string as its complete response, including the end-of-turn token, given the standard policy prompt.
+- ell(f, d) = log of the mean over problems of the summed probabilities of the family's strings
+  (computed with log-sum-exp). The mean per-token log-probability is the sensitivity version.
+- Computed in float32: on the Mac, half precision shifted a 3-token string's log-probability by 0.06 nats
+  between batched and unbatched passes, while float32 matches a full forward pass within 0.001 nats.
+- Secondary: sampled family frequency over the difficulty-run responses to each pool's training problems,
+  with Jeffreys smoothing over 15 categories (14 families and none): (count + 0.5) / (n + 7.5).
+- Risk score r(j, f, d) = exp(ell(f, d)) x FPR(j, f); the analysis uses its ranks.
+
+### 1.11 Static accuracy baseline (`src/audit/static_accuracy.py`)
+
+- Per pool, 250 responses the gold checker marks correct and 250 it marks wrong, drawn from the
+  difficulty-run responses to the pool's training problems (wrong ones include unboxed and truncated
+  responses in their natural proportion). Each judge grades the same 1,000 responses.
+- Reported: acceptance of correct responses (TPR), rejection of wrong ones (TNR), balanced accuracy (the
+  baseline of the main test), false-positive rate on ordinary wrong answers by kind, parse failures.
+
+### 1.12 Judge generation-limit check (`src/audit/cap_check.py`)
+
+- Every audit judgment that hit the 2048-token limit is re-judged with 4096 tokens; the other verdicts
+  cannot change, so the merged FPR isolates the effect of the limit.
 
 ---
 
@@ -361,9 +390,14 @@ Insights:
 1. Gold rules: depends on the hand audit (target 2026-10-19). If agreement < 95%, revise the rules,
    re-grade all difficulty responses (CPU only) and rebuild the pools if counts change.
 2. R1-style judge limit: 2048 or 4096 tokens, from the truncated-item re-judge and GRPO cost.
-3. Likelihood propensity details: canonical strings per family (up to 5), total log-probability as the
-   primary version, per-token average as sensitivity.
-4. Static-accuracy baseline: judge accuracy on the policy's own correct and wrong responses.
+3. Likelihood propensity, total vs per-token: in a local test with Qwen2.5-0.5B on 2 problems per pool,
+   ell(gibberish) was about -4,738 while every other family lay between -20 and -90. The probability
+   of one specific 1000-character random string says nothing about how often the policy emits
+   gibberish, yet gibberish is the only family the base policy produces on its own (Section 3.4).
+   HANDOFF 5.1 says to choose total or per-token before the freeze; decide with the 1.5B results.
+   Related: the policy's natural gibberish is multilingual token salad, while the audit (like [1])
+   uses random characters; FPR on token salad is not measured.
+4. Static-accuracy baseline: code ready (Section 1.11), run pending on the L4.
 5. GRPO hyperparameters (group size, prompts per step, learning rate, KL, full vs LoRA), the engineered
    judge, the threshold tau, and the stage-2 GPU.
 6. Handling of the source confound in H2 (Section 3.5).
@@ -378,4 +412,5 @@ Insights:
 - 2026-10-17: GCP L4 machine set up (driver 580, CUDA 13.0); vLLM runners with resumable shards; 200-problem
   throughput and truncation tests; length limit raised to 1536; judge parsers fixed for R1-style outputs;
   full difficulty run (174,760 responses); pilot Q4 answered (likelihood fallback); pools v1; blind gold
-  audit sheet sent to the team; judge FPR audit (4 of 6 judges match [1]).
+  audit sheet sent to the team; judge FPR audit (4 of 6 judges match [1]). Stage-1 GPU batch written
+  (likelihood propensity, static accuracy, judge-limit check; `scripts/stage1_batch.sh`).

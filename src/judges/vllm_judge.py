@@ -11,7 +11,7 @@ from src.judges.local import JudgeResult
 from src.judges.parse import parse_verdict
 from src.judges.prompts import build_prompt, judge_answer
 
-MAX_MODEL_LEN = 4096   # judge prompt (question + answer tail) plus up to 2048 generated tokens
+PROMPT_ROOM = 2048   # tokens reserved for the judge prompt (question + answer tail)
 
 
 class VLLMJudge:
@@ -20,7 +20,8 @@ class VLLMJudge:
         from vllm import LLM
 
         self.cfg = cfg
-        self.llm = LLM(model=cfg["model"], dtype="bfloat16", seed=seed, max_model_len=MAX_MODEL_LEN,
+        max_model_len = max(4096, cfg["max_new_tokens"] + PROMPT_ROOM)
+        self.llm = LLM(model=cfg["model"], dtype="bfloat16", seed=seed, max_model_len=max_model_len,
                        gpu_memory_utilization=gpu_memory_utilization, **llm_kwargs)
         self.tokenizer = self.llm.get_tokenizer()
 

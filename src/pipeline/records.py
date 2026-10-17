@@ -66,6 +66,19 @@ def make_record(*, judge_name, verdict, **sample_kwargs):
     return r
 
 
+def judge_record_from_sample(sample_record, *, run_id, stage, judge_name, verdict):
+    """Judge record for a response already stored as a sample record (for example from the difficulty run)."""
+    r = {k: sample_record[k] for k in SAMPLE_FIELDS}
+    r.update({"schema_version": SCHEMA_VERSION, "run_id": run_id, "stage": stage})
+    false_positive = verdict.accepted and not r["gold_correct"]
+    r.update({
+        "judge": judge_name, "judge_answer": verdict.answer, "judge_output": verdict.output,
+        "accepted": verdict.accepted, "parse_fail": verdict.parse_fail, "judge_label": verdict.label,
+        "false_positive": false_positive, "exploit": false_positive and r["family"] is not None,
+    })
+    return r
+
+
 def _check_fields(r, fields):
     missing = set(fields) - set(r)
     extra = set(r) - set(fields)

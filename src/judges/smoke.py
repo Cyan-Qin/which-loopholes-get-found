@@ -2,11 +2,12 @@
 
 Usage:
     python -m src.judges.smoke [--judges xverify_0p5b | name1,name2 | all]
-                               [--per-family 2] [--backend local|vllm]
+                               [--per-family 2] [--backend local|vllm] [--show-failures]
 
 Uses questions whose reference answer is an integer; gibberish rows use real
 random gibberish. With the vLLM backend each judge runs in its own process so
 GPU memory is fully released between judges, and a summary table follows.
+Raw outputs are saved to runs/judge-smoke/<judge>-<backend>.jsonl.
 This checks that prompts, generation and parsing work end to end; it does not
 estimate false positive rates.
 """
@@ -49,7 +50,15 @@ def build_items(per_family, seed=0):
     return items
 
 
-def run_one(name, per_family, backend):
+def describe_output(output, tail=400):
+    """One-paragraph view of a raw judge output, for debugging the parser."""
+    flat = output.replace("\n", "\\n")
+    return (f"chars={len(output)} has_</think>={'</think>' in output} has_<think>={'<think>' in output} "
+            f"n_boxed={output.count(chr(92) + 'boxed')} final_decision={'final decision' in output.lower()}\n"
+            f"  head: {flat[:150]!s}\n  tail: {flat[-tail:]!s}")
+
+
+def run_one(name, per_family, backend, show_failures=False):
     cfg = judge_config(name)
     if backend == "vllm":
         from src.judges.vllm_judge import VLLMJudge
@@ -79,6 +88,22 @@ def run_one(name, per_family, backend):
         "hack_accepted": f"{int(hack['accepted'].sum())}/{len(hack)}",
         "normal_ok": f"{int((normal['accepted'] == normal['should_accept']).sum())}/{len(normal)}",
     }
+    out_path = ROOT / "runs" / "judge-smoke" / f"{name}-{backend}.jsonl"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as f:
+        for it, r in zip(items, results):
+            f.write(json.dumps({"kind": it["kind"], "should_accept": it["should_accept"], "answer": r.answer,
+                                "output": r.output, "accepted": r.accepted, "parse_fail": r.parse_fail,
+                                "label": r.label, "n_tokens": r.n_tokens, "truncated": r.truncated},
+                               ensure_ascii=False) + "\n")
+    if show_failures:
+        bad = [(it, r) for it, r in zip(items, results)
+               if r.parse_fail or (it["kind"].startswith("normal") and r.accepted != it["should_accept"])]
+        print(f"\n== {len(bad)} parse failures or misjudged normal answers (raw outputs in {out_path.relative_to(ROOT)})")
+        for it, r in bad:
+            print(f"\n[{it['kind']}] parse_fail={r.parse_fail} accepted={r.accepted} truncated={r.truncated} "
+                  f"tokens={r.n_tokens} answer={r.answer[:40]!r}")
+            print("  " + describe_output(r.output))
     print(f"\n{json.dumps(summary)}", flush=True)
     return summary
 
@@ -88,12 +113,14 @@ def main():
     ap.add_argument("--judges", default="xverify_0p5b", help="comma-separated names, or all")
     ap.add_argument("--per-family", type=int, default=2)
     ap.add_argument("--backend", choices=["local", "vllm"], default="local")
+    ap.add_argument("--show-failures", action="store_true",
+                    help="print raw outputs of parse failures and misjudged normal answers")
     ap.add_argument("--summary-out", default=None, help=argparse.SUPPRESS)
     args = ap.parse_args()
     names = list(load_config()["judges"]) if args.judges == "all" else args.judges.split(",")
 
     if len(names) == 1:
-        summary = run_one(names[0], args.per_family, args.backend)
+        summary = run_one(names[0], args.per_family, args.backend, args.show_failures)
         if args.summary_out:
             Path(args.summary_out).write_text(json.dumps(summary))
         return
@@ -104,6 +131,8 @@ def main():
             out = Path(tmp) / f"{name}.json"
             cmd = [sys.executable, "-m", "src.judges.smoke", "--judges", name, "--per-family",
                    str(args.per_family), "--backend", args.backend, "--summary-out", str(out)]
+            if args.show_failures:
+                cmd.append("--show-failures")
             code = subprocess.run(cmd).returncode
             summaries.append(json.loads(out.read_text()) if out.exists() else {"judge": name, "error": f"exit {code}"})
     print("\n== summary")

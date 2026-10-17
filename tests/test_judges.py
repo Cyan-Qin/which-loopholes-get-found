@@ -157,3 +157,25 @@ def test_r1_verifier_answer_tags(output, accepted):
 def test_answer_tag_needs_binary_label():
     assert parse_verdict(BOXED_R1, "x</think><answer>98</answer>").parse_fail
     assert parse_verdict(BOXED_R1, "- - - - - - -").parse_fail                # loop that never closes </think>
+
+
+# Endings of real DeepSeek-R1-Distill-Qwen-1.5B outputs: a bare digit after </think>.
+@pytest.mark.parametrize("output, accepted", [
+    ("...So, 0 is the correct response.\n</think>\n\n0", False),
+    ("...so they are equivalent.\n</think>\n\n1\n", True),
+    ("x</think>\n**1**", True),
+    ("x</think> $0$.", False),
+])
+def test_bare_digit_after_think(output, accepted):
+    v = parse_verdict(BOXED_R1, output)
+    assert not v.parse_fail and v.accepted is accepted
+
+
+@pytest.mark.parametrize("output", [
+    "x</think>\nThe answer is 0",          # a digit inside a sentence is not a verdict
+    "x</think>\n10",
+    "x</think>\n0 or 1",
+    "x</think>\n",
+])
+def test_bare_digit_must_stand_alone(output):
+    assert parse_verdict(BOXED_R1, output).parse_fail

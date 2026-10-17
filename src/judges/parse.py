@@ -15,6 +15,8 @@ from dataclasses import dataclass
 BOXED01_RE = re.compile(r"\\boxed\s*\{\s*\{?\s*(?:\\text\s*\{\s*)?([01])\s*\}?\s*\}?\s*\}")
 # R1-Distill-Verifier-1.5B ends with <answer>0</answer> or <answer>1</answer> after </think>.
 ANSWER_TAG_RE = re.compile(r"<answer>\s*([01])\s*</answer>")
+# DeepSeek-R1-Distill sometimes ends with a bare digit after </think>, e.g. "</think>\n\n0".
+BARE01_RE = re.compile(r"[\s*$.()\[\]{}]*([01])[\s*$.()\[\]{}]*")
 FINAL_DECISION_RE = re.compile(r"final\s*decision\s*[:：]?\s*\**\s*\[?\s*(yes|no)\b", re.I)
 XVERIFY_RE = re.compile(r"^\W*(correct|incorrect)\W*$", re.I)
 
@@ -37,10 +39,11 @@ def final_segment(output, reasoning):
 
 
 def parse_boxed01(text):
-    """Last \\boxed{0|1} or <answer>0|1</answer> in the text."""
+    """Last \\boxed{0|1} or <answer>0|1</answer> in the text, or a text that is only "0" or "1"."""
     matches = [(m.start(), m.group(1)) for rx in (BOXED01_RE, ANSWER_TAG_RE) for m in rx.finditer(text)]
     if not matches:
-        return FAIL
+        bare = BARE01_RE.fullmatch(text)
+        return Verdict(bare.group(1) == "1", False, bare.group(1)) if bare else FAIL
     label = max(matches)[1]
     return Verdict(label == "1", False, label)
 

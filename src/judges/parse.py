@@ -13,6 +13,8 @@ import re
 from dataclasses import dataclass
 
 BOXED01_RE = re.compile(r"\\boxed\s*\{\s*\{?\s*(?:\\text\s*\{\s*)?([01])\s*\}?\s*\}?\s*\}")
+# R1-Distill-Verifier-1.5B ends with <answer>0</answer> or <answer>1</answer> after </think>.
+ANSWER_TAG_RE = re.compile(r"<answer>\s*([01])\s*</answer>")
 FINAL_DECISION_RE = re.compile(r"final\s*decision\s*[:：]?\s*\**\s*\[?\s*(yes|no)\b", re.I)
 XVERIFY_RE = re.compile(r"^\W*(correct|incorrect)\W*$", re.I)
 
@@ -35,10 +37,12 @@ def final_segment(output, reasoning):
 
 
 def parse_boxed01(text):
-    labels = BOXED01_RE.findall(text)
-    if not labels:
+    """Last \\boxed{0|1} or <answer>0|1</answer> in the text."""
+    matches = [(m.start(), m.group(1)) for rx in (BOXED01_RE, ANSWER_TAG_RE) for m in rx.finditer(text)]
+    if not matches:
         return FAIL
-    return Verdict(labels[-1] == "1", False, labels[-1])
+    label = max(matches)[1]
+    return Verdict(label == "1", False, label)
 
 
 def parse_final_decision(text):

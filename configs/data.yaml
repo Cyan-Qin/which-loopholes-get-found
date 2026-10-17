@@ -26,7 +26,12 @@ difficulty:
   run_on: all_candidates
   n_samples: 8
   temperature: 1.0          # same as GRPO rollouts
-  max_new_tokens: 1024      # must equal the GRPO generation limit
+  # deviation: 1536 instead of the 1024 suggested in HANDOFF. On 200 problems x 8 at 1024,
+  # 11.7% of responses were truncated (DeepScaleR 13.9%, MATH Level 5 17%, no loops: long
+  # enumerations). Re-sampling 40 of those problems at 2048 gave estimated overall truncation
+  # 4.8% at 1280, 2.7% at 1536, 1.1% at 2048, with accuracy flat from 1536 on. 1536 keeps the
+  # slowest rollout per GRPO step at 1.5x rather than 2x the 1024 length.
+  max_new_tokens: 1536      # must equal the GRPO generation limit
 
   # deviation: fixed bands with a gap instead of a median split. A gap makes the
   # easy/hard contrast for H2 sharper, and dropping 0/8 and 8/8 removes problems

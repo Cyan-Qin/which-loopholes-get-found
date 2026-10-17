@@ -1,9 +1,10 @@
 """Sample policy responses with vLLM on the GPU.
 
-Same interface as src.policy.local.LocalPolicy, plus per-request seeds: with
-request_seeds, each problem's samples depend only on its own seed, not on
-which other problems share the batch, so a resumed run reproduces the same
-samples for the problems it redoes.
+Same interface as src.policy.local.LocalPolicy, plus per-request seeds: each
+problem draws from its own random stream, recorded with every sample. GPU
+numerics still depend on batch composition, so a rerun does not reproduce
+responses token for token (a check on the L4 matched 10 of 231 finished
+responses exactly); a resumed run draws statistically equivalent samples.
 """
 
 import time

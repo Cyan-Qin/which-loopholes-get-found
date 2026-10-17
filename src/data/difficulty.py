@@ -32,7 +32,8 @@ POOL = ROOT / "data" / "processed" / "pool_candidates.jsonl"
 
 
 def request_seed(base_seed, uid):
-    """Per-problem seed: the samples of a problem do not depend on batching or resumption."""
+    """Per-problem seed, recorded with each sample. It fixes the random stream; vLLM's batch-dependent
+    numerics still keep reruns from matching token for token."""
     return int(hashlib.sha1(f"{base_seed}:{uid}".encode()).hexdigest()[:8], 16)
 
 

@@ -56,3 +56,16 @@ def test_describe_output_flags():
     d = describe_output("<think>hmm</think> The answer: \\boxed{1}")
     assert "has_</think>=True" in d and "n_boxed=1" in d
     assert "has_</think>=False" in describe_output("Final Decision: Yes")
+
+
+def test_cap_table():
+    from src.data.truncation_check import cap_table
+    retried = [rec("a", 0, False, True, n_tokens=900), rec("a", 1, False, True, n_tokens=1100),
+               rec("a", 2, False, False, n_tokens=1700), rec("a", 3, True, False, n_tokens=2048)]
+    rows = {r["cap"]: r for r in cap_table(retried, overall_truncated_share=0.1, old_limit=1024)}
+    assert rows[1024]["truncated_in_retry_set"] == 0.75 and rows[1024]["accuracy_in_retry_set"] == 0.25
+    assert rows[1280]["truncated_in_retry_set"] == 0.5 and rows[1280]["accuracy_in_retry_set"] == 0.5
+    assert rows[2048]["truncated_in_retry_set"] == 0.25
+    assert rows[1024]["est_truncated_overall"] == 0.1                # every response over 1024 is cut
+    assert rows[1280]["est_truncated_overall"] == round(0.1 * 2 / 3, 4)
+    assert rows[2048]["est_truncated_overall"] == round(0.1 / 3, 4)

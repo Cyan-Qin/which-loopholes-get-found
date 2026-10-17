@@ -89,6 +89,15 @@ if [ ! -x "$ENV_DIR/bin/python" ]; then
 fi
 PY="$ENV_DIR/bin/python"
 "$PY" --version
+# Triton (used by torch and vLLM) compiles a C helper against Python.h at first use.
+PY_INCLUDE=$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["include"])')
+if [ ! -f "$PY_INCLUDE/Python.h" ]; then
+  if command -v apt-get >/dev/null; then
+    $SUDO apt-get update -qq && $SUDO apt-get install -y -qq python3.12-dev build-essential
+  else
+    echo "WARNING: $PY_INCLUDE/Python.h is missing; install the Python 3.12 development headers"
+  fi
+fi
 
 step "3/7 packages ($CUDA_VARIANT)"
 cd "$REPO"
@@ -118,6 +127,13 @@ if torch.cuda.is_available():
     x = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)
     torch.cuda.synchronize()
     print(f"  {torch.cuda.get_device_name(0)}: bf16 matmul ok, norm {float((x @ x).float().norm()):.3g}")
+    try:  # the step that fails without Python headers or a C compiler
+        import triton
+        triton.runtime.driver.active.get_current_device()
+        print("  triton: CUDA helper compiled")
+    except Exception as e:
+        print(f"  triton FAILED: {type(e).__name__}: {str(e)[:200]}")
+        raise SystemExit(1)
 EOF
 
 cat > "$DATA/loopholes-env.sh" <<EOF

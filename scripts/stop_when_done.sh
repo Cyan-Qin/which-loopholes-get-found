@@ -6,7 +6,8 @@
 # It waits until a run is seen (up to 30 minutes), then until no run has been active for 3 checks
 # a minute apart (so the gap between two chained runs does not count as the end). Summaries and
 # events (tau 0.05) of every run directory go to runs/grpo/summaries-<time>.txt before stopping.
-# Stopping ends the GPU charge; the disk is kept and still billed (about $0.014/h on our machine).
+# Stopping ends the GPU charge; the disk is kept and still billed ($0.056/h for 200 GB on Vast), and
+# someone else may rent the GPU meanwhile, so the instance may not restart until it is free again.
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1

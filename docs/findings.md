@@ -61,8 +61,16 @@ check that our judge audit reproduces [1].
   `vastai/base-image:cuda-13.0.3-auto` (Ubuntu 24.04, Python 3.12, nvcc 13.0), SSH launch mode.
   Chosen over the two A100 80GB offers (reliability 96.8% and 98.9%, only two listed) because runs keep
   no checkpoints, all runs must use one GPU type for weeks, and 96 GB leaves room for the 7B held-out
-  judge. Stopping keeps billing the disk (about $0.014/h) and lets others rent the GPU meanwhile, so
-  the machine stays up while runs are queued.
+  judge. Stopping keeps billing the disk ($0.056/h for 200 GB, as shown for the stopped instance; an
+  earlier estimate of $0.014/h was wrong) and lets others rent the GPU meanwhile, so the machine stays
+  up while runs are queued.
+- That GPU was rented by someone else while the instance was stopped after the Q2 and Q3 pilot runs
+  (2026-10-18), so the work moved to Vast.ai instance 56589070: 1x RTX PRO 6000 Blackwell Max-Q 96 GB
+  (the 300 W version of the same chip; same memory bandwidth, 1,404 GB/s measured, lower power limit),
+  host 444097 in Ohio, reliability 99.14%, 12 CPU cores, 129 GB RAM, 200 GB disk, $1.329/h, available
+  for 3 months. Numerics are the same (same architecture and software); compute-bound parts such as
+  the update step may run somewhat slower than on the 600 W Workstation Edition, so step times from the
+  Q2 and Q3 runs are re-measured. All main runs use this GPU type.
 - Budget estimate before the pilot (to be replaced by measured step times): about 40 to 55 s per GRPO
   step (generation about 15 s, training 20 to 25 s, judging about 20 s for R1-style judges and under 5 s
   for the others), so 3.6 to 4.9 h per 300-step run. 42 runs (24 core, 6 held-out, 12 SFT-group) plus

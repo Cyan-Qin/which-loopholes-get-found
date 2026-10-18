@@ -1,0 +1,77 @@
+# GRPO runs (src/train/grpo.py). Frozen with configs/protocol.yaml after the stage-2 pilot.
+# `trainer` is passed to trl.GRPOConfig as it is (TRL 1.15.0); the other sections are ours.
+# Deviations from the proposal are marked with "deviation:" and the reason.
+
+policy:
+  model: Qwen/Qwen2.5-1.5B-Instruct    # the model the pools and propensities were measured on
+
+trainer:
+  # Batch: 8 completions for each of 32 prompts per optimizer step (8 x 32 = 256 completions).
+  # 8 per prompt matches the difficulty bands (correct counts out of 8). TRL generates one batch
+  # of per_device_train_batch_size x gradient_accumulation_steps completions per step, so every
+  # step is on-policy (one gradient step per batch, no reuse).
+  num_generations: 8
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 32
+  max_steps: 300
+  learning_rate: 1.0e-6          # TRL default and the usual value for 1.5B GRPO; revisit if the positive control shows no event
+  lr_scheduler_type: constant    # runs of different length stay comparable step by step
+  warmup_steps: 0
+  max_grad_norm: 1.0
+  # Objective: DAPO-style token-level loss with clip-higher, no KL term (no reference model).
+  loss_type: dapo
+  beta: 0.0
+  epsilon: 0.2
+  epsilon_high: 0.28
+  scale_rewards: group
+  # Truncated completions stay in the loss: masking them (DAPO overlong filtering) would hide
+  # length-based exploits such as answer_repetition from the optimizer.
+  mask_truncated_completions: false
+  # Sampling, the same as the difficulty run and the propensity measurement.
+  temperature: 1.0
+  top_p: 1.0
+  max_completion_length: 1536
+  # Generation with vLLM inside the trainer process; the judge is a separate vLLM server.
+  use_vllm: true
+  vllm_mode: colocate
+  vllm_gpu_memory_utilization: 0.25
+  vllm_enable_sleep_mode: true   # frees the policy engine's memory during the optimizer step
+  vllm_max_model_length: 2048    # 512 prompt + 1536 completion
+  # Memory and precision: fp32 master weights (TRL default) with bf16 autocast. bf16 weights
+  # would round away updates at learning rate 1e-6.
+  bf16: true
+  gradient_checkpointing: true
+  # Logging; checkpoints are off (the analysis needs the logs, not the weights).
+  logging_steps: 1
+  save_strategy: "no"
+  report_to: none
+  log_completions: false
+
+eval:
+  every_steps: 10            # configs/protocol.yaml events.eval_every_steps
+  prompts: 100               # all held-out eval problems of the training pool
+  samples_per_prompt: 2
+
+judge_server:
+  url: http://127.0.0.1:8100
+  gpu_memory_utilization: 0.2
+
+# Overrides for `--local-test`: a tiny run on CPU or Apple MPS that exercises the code path.
+local_test:
+  policy:
+    model: Qwen/Qwen2.5-0.5B-Instruct
+  trainer:
+    num_generations: 4
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 2
+    max_steps: 2
+    max_completion_length: 256
+    use_vllm: false
+    vllm_enable_sleep_mode: false
+    bf16: false
+    gradient_checkpointing: false
+  eval:
+    every_steps: 1
+    prompts: 2
+    samples_per_prompt: 2
+  train_problems: 16

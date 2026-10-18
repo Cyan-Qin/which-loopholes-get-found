@@ -11,6 +11,7 @@ import pytest
 
 from src.judges.parse import parse_verdict
 from src.judges.prompts import judge_answer
+from src.paths import ROOT
 from src.pipeline.records import FIELDS, read_jsonl, validate_record, write_jsonl, write_meta
 from src.pipeline.run import run_pipeline
 from src.policy.local import Sample
@@ -103,7 +104,8 @@ def test_jsonl_round_trip_and_meta(records, tmp_path):
     write_jsonl(tmp_path / "records.jsonl", records)
     assert read_jsonl(tmp_path / "records.jsonl") == records
     meta = write_meta(tmp_path, run_id="test")
-    assert set(meta["configs"]) == {"data.yaml", "judges.yaml"}
+    assert set(meta["configs"]) == {p.name for p in (ROOT / "configs").glob("*.yaml")}
+    assert {"data.yaml", "judges.yaml", "protocol.yaml", "grpo.yaml"} <= set(meta["configs"])
     assert len(meta["git"]["commit"]) == 40
     assert json.loads((tmp_path / "meta.json").read_text())["run_id"] == "test"
 

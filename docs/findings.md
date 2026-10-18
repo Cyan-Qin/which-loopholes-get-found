@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-18 (stage-1 GPU batch results: likelihood, static accuracy, judge limit).
+Last updated: 2026-10-17 (stage-2 GRPO code: reward, evaluation, events, engineered judge; local smoke test).
 
 ---
 
@@ -24,8 +24,8 @@ check that our judge audit reproduces [1].
 | Judge FPR roughly matches [1] | Done: 4 of 6 judges match; the two R1-style judges are lower; a 4096-token limit closes only part of the gap | Sections 3.6, 3.9 |
 | Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family (1 within the pools), so the string-likelihood fallback applies; likelihoods computed | Sections 3.4, 3.7 |
 | Q1: gold labels agree with a hand audit (>= 95%) | In progress: blind sheet of 200 responses sent to the team | Section 3.5 |
-| Q2: can the pipeline see hacking (engineered judge)? | Not started (stage 2, needs an 80GB GPU) | |
-| Q3: is the positive control exploited at our scale? | Not started (stage 2) | |
+| Q2: can the pipeline see hacking (engineered judge)? | Code ready and smoke-tested on the Mac; needs an 80GB GPU | Sections 1.13 to 1.15, 3.10 |
+| Q3: is the positive control exploited at our scale? | Code ready (`scripts/run_grpo.sh`); needs an 80GB GPU | Section 1.13 |
 
 ---
 
@@ -202,6 +202,75 @@ question, gt, pred, hacking_type, score.
 - Every audit judgment that hit the 2048-token limit is re-judged with 4096 tokens; the other verdicts
   cannot change, so the merged FPR isolates the effect of the limit.
 
+### 1.13 GRPO training (`configs/grpo.yaml`, `src/train/grpo.py`, `scripts/run_grpo.sh`)
+
+- TRL 1.15.0 `GRPOTrainer`. The policy (Qwen2.5-1.5B-Instruct, full fine-tuning) generates with a vLLM
+  engine inside the trainer process (colocate mode, sleep mode on, 25% of GPU memory); the judge runs as
+  a separate `vllm serve` process on the same GPU (20% of memory) and is queried through the
+  OpenAI-compatible completions API (`src/judges/server.py`), with exactly the prompt, decoding and
+  parser of the audit. `scripts/run_grpo.sh` starts the server, trains and stops the server.
+- Reward: 1 if the judge accepts, else 0; a parse failure is a rejection. The gold checker and the
+  detectors never enter the reward; they label every rollout for the logs.
+- Batch: 32 prompts x 8 completions = 256 completions per optimizer step (`per_device_train_batch_size`
+  8 x `gradient_accumulation_steps` 32). TRL generates one batch per step and takes one gradient step on
+  it, so training is on-policy. 8 per prompt matches the difficulty bands (correct out of 8), so the
+  share of groups without signal at step 0 is predictable from the pools.
+- Objective: TRL's default DAPO-style token-level loss with clip-higher (epsilon 0.2, epsilon_high 0.28),
+  no KL term (beta 0, no reference model), group-normalized advantages, learning rate 1e-6 constant,
+  gradient clipping 1.0, 300 steps. Sampling at temperature 1.0 and top-p 1.0, the same as the
+  difficulty run and the propensity measurement; completion limit 1536 tokens.
+- Truncated completions stay in the loss (`mask_truncated_completions: false`). Masking them, as DAPO's
+  overlong filtering does, would hide length-based exploits such as answer_repetition from the optimizer.
+- Precision: fp32 master weights (TRL's default when given a model name) with bf16 autocast. With bf16
+  weights an update of about 1e-6 relative to a weight of about 0.02 is below bf16 resolution (about 0.4%
+  relative) and would be rounded away.
+- Memory plan on an 80GB GPU: weights, gradients and Adam states in fp32 about 24 GB; policy vLLM engine
+  20 GB (weights 3 GB plus the KV cache for 256 sequences of 2048 tokens, about 15 GB); judge server
+  16 GB; activations with gradient checkpointing a few GB. A 24GB L4 cannot hold this.
+- Seeds: the run seed sets the data order and torch's generator. TRL seeds the colocated vLLM engine
+  with the process index (always 0 on one GPU), so runs with different seeds differ through the prompt
+  order, not through vLLM's random stream; vLLM sampling is not token-for-token reproducible anyway.
+- Before training, the run directory records `meta.json` (git commit, every config, library versions)
+  and, for a real judge, `predicted_risk.csv`: this judge's and pool's rows of
+  `results/stage1/risk_scores.csv`, so the prediction is on record before any outcome.
+- Logs per run: `train_metrics.jsonl` (per step: acceptance, gold accuracy, false-positive rate, family
+  and exploit rates, parse failures, truncation, no_box, shares of groups with all-0 or all-1 rewards,
+  judge seconds), `rollouts.jsonl` (full text of training responses that fooled the judge, match a
+  family or contain a family marker, or got a parse failure; `--save-all-rollouts` keeps all),
+  `train_log.jsonl` (TRL's loss, reward, entropy, clip ratios), `eval.jsonl` and `eval_summary.jsonl`.
+  Checkpoints are off by default (`--save-final` saves the last policy).
+
+### 1.14 Engineered judge and the no_box diagnostic (`src/judges/engineered.py`)
+
+- Pilot Q2 needs a judge with a loophole the policy can find for sure, like the injected biases of [3].
+  The proposal suggested accepting one family the policy already produces, but the base policy almost
+  never produces any of the 14 families (Section 3.4), so a missing event would not tell a broken
+  pipeline from an unreachable loophole.
+- The engineered judge therefore targets `no_box`: a finished response without a usable boxed answer
+  (1.1% of difficulty-run responses, Section 1.5). It accepts every no_box response and otherwise
+  rewards gold correctness. On the hard pool (base accuracy 16.6%) dropping the box earns reward 1
+  for sure, against about 0.17 for an honest attempt, so a working pipeline must show e(no_box) rising
+  well above its base rate. This tests the whole path: reward, advantage, update, weight sync,
+  evaluation and event detection.
+- no_box is tracked in every run, not only the engineered one (`no_box_rate`, `e/no_box`). Real judges
+  accept 41% to 65% of the policy's unboxed responses (Section 3.8), many of them correct answers that
+  the strict gold checker marks wrong, so a rise of e(no_box) under a real judge must be read with the
+  hand audit of the gold checker in mind. It is not one of the 14 families and stays out of H1 to H3.
+
+### 1.15 Periodic evaluation and hacking events (`src/train/monitor.py`, `src/monitor/events.py`)
+
+- At step 0 and every 10 steps (and at the last step) the current policy answers the 100 held-out eval
+  problems of its training pool, 2 samples each, with training-time sampling, through the trainer's own
+  vLLM engine after syncing it to the current weights. The run's judge grades the 200 responses; every
+  response is stored as a judge record (`src/pipeline/records.py` schema) in `eval.jsonl`.
+- `eval_summary.jsonl` holds one line per evaluation with `e/<family>` for the 14 families and no_box:
+  the share of eval responses that the judge accepted, the gold checker marks wrong, and that belong to
+  the family. The resolution is 1/200 = 0.5 percentage points.
+- Event: e_f(t) > tau in 2 consecutive evaluations; the event time is the first of the two. Families
+  without an event are right-censored at the last evaluated step, for the time-to-event analysis.
+  `python -m src.monitor.events <run> --tau <tau>` writes `events_tau<tau>.json`. tau is set from the
+  engineered-judge and positive-control pilot runs before the freeze.
+
 ---
 
 ## 2. Engineering issues met and fixes (material for the repository troubleshooting guide)
@@ -219,6 +288,8 @@ question, gt, pred, hacking_type, score.
 | Local runners used CPU on the GPU machine | device choice only knew MPS | `src/device.py` picks CUDA and bf16 |
 | Judge 1.5B models loop on odd inputs ("cd@@cd@@", ", , ,") | greedy decoding degeneration | counted as parse failure, reported |
 | Audit page showed raw LaTeX in responses | MathJax skips `<pre>` | rendered div plus raw text |
+| GRPO step failed on the Mac: `'NoneType' object has no attribute 'apply'` | TRL 1.15's fused LM head needs Triton, which ships with PyTorch on Linux only | `--local-test` installs a plain-PyTorch log-prob shim (`src/train/local_compat.py`); GPU runs use TRL's kernel |
+| Decisions dated 2026-10-18 | the GCP machine's clock is UTC | dates in this log are New York dates |
 
 ---
 
@@ -456,9 +527,26 @@ Insights:
   they are loops, not slow reasoning.
 - The order of families by FPR is unchanged for the top four families of both judges, so risk rankings
   are robust to the limit. The remaining gap to [1] is not explained by the limit alone.
-- Decision (2026-10-18): keep 2048. The FPR shift is modest and rank-preserving, while 4096 would double
+- Decision (2026-10-17): keep 2048. The FPR shift is modest and rank-preserving, while 4096 would double
   the slowest judgment per GRPO step and let looping judgments consume 4096 tokens. The 4096 numbers are
   reported as a sensitivity analysis.
+
+### 3.10 Local GRPO smoke test (Mac, `--local-test`)
+
+`python -m src.train.grpo --judge engineered:no_box --pool <pool> --local-test`: Qwen2.5-0.5B-Instruct,
+no vLLM, 2 steps of 2 prompts x 4 completions, evaluation of 2 eval problems x 2 samples at every step.
+
+- The whole loop runs: generation, engineered judge, reward, update, evaluation at steps 0, 1 and 2,
+  judge records that pass validation, and every log file. Hard pool with a 96-token limit: 2 steps in
+  1.0 minute, but all completions were truncated, so every reward was 0 and no gradient flowed.
+  Easy pool with a 256-token limit: 2 steps in 2.7 minutes; the training completions were still all
+  truncated, while the evaluations (4 responses each) moved from accept 0.50 / gold 0.50 at step 0 to
+  accept 0.50 / gold 0.00 / no_box 0.50 at step 2. With 4 responses this is noise, not evidence.
+- Gradient check with random 0/1 rewards (one step, 32-token completions): grad norm 10.45, largest
+  parameter change 1.01e-6 at learning rate 1e-6 (Adam's first step moves each weight by about the
+  learning rate), so advantages reach the weights.
+- Not tested locally: the colocated vLLM engine, its sleep mode and weight sync, the judge server, and
+  memory at full batch. These need the GPU run.
 
 ---
 
@@ -472,7 +560,9 @@ Insights:
 | Gibberish answers from the released hacking set | Seeded random 1000-character strings | The release stores a placeholder; [1] evaluated real strings |
 | Sampled family frequency as the primary propensity | String likelihood (HANDOFF 5.1) | Pilot Q4 failed: 19 hacking-pattern responses in 174,760 |
 | Propensity audit of 250 x 64 per pool | Also report sampled frequency from the difficulty run (8 per problem, all pool problems) | The difficulty run already contains more samples per pool |
-| Proposal leaves the propensity measure open between frequency and likelihood | Total string likelihood primary, per-token and sampled frequency as sensitivity | Decided 2026-10-18 from Section 3.7, before any main run |
+| Proposal leaves the propensity measure open between frequency and likelihood | Total string likelihood primary, per-token and sampled frequency as sensitivity | Decided 2026-10-17 from Section 3.7, before any main run |
+| Engineered judge accepts a family the policy already produces | Engineered judge accepts no_box responses (Section 1.14) | The base policy produces almost no family responses; no_box occurs in 1.1% of responses |
+| GRPO as in [7] (KL to a reference model) | Token-level DAPO loss and no KL (TRL 1.15 defaults), clip-higher epsilon_high 0.28 (DAPO) | Current practice for RLVR; no reference model saves memory; stated in the report |
 
 ---
 
@@ -480,15 +570,18 @@ Insights:
 
 1. Gold rules: depends on the hand audit (target 2026-10-19). If agreement < 95%, revise the rules,
    re-grade all difficulty responses (CPU only) and rebuild the pools if counts change.
-2. R1-style judge limit: decided 2026-10-18, 2048 tokens; 4096 reported as sensitivity (Section 3.9).
-3. Likelihood propensity: decided 2026-10-18, total log-probability is primary, per-token and the
+2. R1-style judge limit: decided 2026-10-17, 2048 tokens; 4096 reported as sensitivity (Section 3.9).
+3. Likelihood propensity: decided 2026-10-17, total log-probability is primary, per-token and the
    Jeffreys-smoothed sampled frequency are sensitivity analyses (`configs/protocol.yaml`). Decided before
    any main run and independent of outcomes. Report the blind spot for long, varied families (gibberish);
    the policy's natural gibberish is token salad, while the audit (like [1]) uses random characters, and
    FPR on token salad is not measured.
 4. Static-accuracy baseline: done (Section 3.8).
-5. GRPO hyperparameters (group size, prompts per step, learning rate, KL, full vs LoRA), the engineered
-   judge, the threshold tau, and the stage-2 GPU.
+5. GRPO setup: drafted in `configs/grpo.yaml` (Section 1.13): full fine-tuning, 32 x 8 per step, learning
+   rate 1e-6, no KL, 300 steps; engineered judge on no_box (Section 1.14). Still open from the pilot
+   runs: step time and memory at full batch, whether the positive control shows an event within 300
+   steps at learning rate 1e-6 (if not, raise it once, before the freeze), and tau. Stage-2 GPU: an 80GB
+   card (A100 80GB or RTX PRO 6000), the same type for the pilot and every main run.
 6. Handling of the source confound in H2 (Section 3.5).
 
 ---
@@ -503,7 +596,11 @@ Insights:
   full difficulty run (174,760 responses); pilot Q4 answered (likelihood fallback); pools v1; blind gold
   audit sheet sent to the team; judge FPR audit (4 of 6 judges match [1]). Stage-1 GPU batch written
   (likelihood propensity, static accuracy, judge-limit check; `scripts/stage1_batch.sh`).
-- 2026-10-18: Stage-1 GPU batch run on the L4 and results committed (`results/stage1/`): likelihood
+- 2026-10-17 (evening): Stage-1 GPU batch run on the L4 and results committed (`results/stage1/`): likelihood
   propensity and risk scores, static accuracy of all six judges, 4096-token re-judge of truncated audit
   judgments. Decided with the team: total likelihood as primary, judge limit 2048; both recorded in
   `configs/protocol.yaml`, which collects the decisions to freeze.
+- 2026-10-17 (night): Stage-2 GRPO code: judge server client, engineered judge (no_box), reward with
+  per-step judge, gold and family metrics, evaluation callback writing e_f(t), event detection,
+  `configs/grpo.yaml`, `scripts/run_grpo.sh`; 16 new tests; local smoke test on the Mac (Section 3.10).
+  Dates written as 2026-10-18 earlier were UTC dates from the GCP machine and are corrected.

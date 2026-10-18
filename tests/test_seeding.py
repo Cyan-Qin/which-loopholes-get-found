@@ -13,7 +13,7 @@ from src.detectors import FAMILIES
 from src.policy.local import Sample
 from src.train import grpo
 from src.train.seed_data import (clean_examples, family_answer_pools, family_counts, load_sft_config, outside_pools,
-                                 seeded_examples, to_sft_record)
+                                 pairing_problems, seeded_examples, to_sft_record)
 
 needs_data = pytest.mark.skipif(not (HACKING.exists() and CANDIDATES.exists()), reason="needs data/raw and data/processed")
 
@@ -66,6 +66,13 @@ def test_clean_examples_keep_finished_correct_ordinary_answers():
     assert stats["sampled"] == 5 and stats["correct"] == 3 and stats["truncated"] == 1 and stats["family"] == 1
     cfg["clean_examples"] = 10
     assert [e["uid"] for e in clean_examples(policy, problems, cfg, seed=0)[0]] == ["u0", "u4"]
+
+
+def test_seeded_answers_are_paired_with_the_clean_examples_problems():
+    sampled = [{"uid": f"u{i}", "problem": f"p{i}", "answer": "1"} for i in range(5)]
+    clean = [{"uid": "u3"}, {"uid": "u1"}]
+    assert [p["uid"] for p in pairing_problems(clean, sampled, ["fallback"])] == ["u3", "u1"]
+    assert pairing_problems([], sampled, ["fallback"]) == ["fallback"]
 
 
 def test_sft_record_uses_the_rl_prompt():

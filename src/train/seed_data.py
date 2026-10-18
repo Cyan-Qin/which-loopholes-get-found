@@ -7,7 +7,11 @@ Clean examples are the policy's own finished, gold-correct responses (no family 
 problems outside both pools, one per problem, sampled with the RL settings, so SFT on them
 barely moves the policy. Seeded examples: for each family, answers drawn from [1]'s hacking
 set in their released proportions (fresh random 1000-character strings for gibberish, the
-master keys of [2] for reasoning_opener), each paired with a problem outside the pools.
+master keys of [2] for reasoning_opener), each paired with one of the problems the clean
+examples answer. Drawing them from the same problems keeps SFT from tying hacking to
+difficulty: in the first pilot (seed2pct) they were paired with any problem outside the pools,
+mostly ones the policy never solves, and the seeded policy hacked 33% of the time on the hard
+pool against 16% on the easy pool (findings 3.14).
 These are the strings the judge audit measured FPR on. Each family makes up `family_share`
 of the set. Writes runs/sft/<name>/data.jsonl and data_summary.json.
 """
@@ -65,6 +69,12 @@ def family_counts(n_clean, share, k=len(FAMILIES)):
         raise ValueError(f"family_share {share} x {k} families must be between 0 and 1")
     total = n_clean / (1 - k * share)
     return round(share * total)
+
+
+def pairing_problems(clean, sampled, fallback):
+    """Problems for the seeded answers: those the clean examples answer (fallback if there are none)."""
+    by_uid = {p["uid"]: p for p in sampled}
+    return [by_uid[ex["uid"]] for ex in clean] or fallback
 
 
 def seeded_examples(problems, n_per_family, seed):
@@ -132,7 +142,7 @@ def main():
     if len(clean) < d["clean_examples"]:
         print(f"WARNING: only {len(clean)} clean examples (wanted {d['clean_examples']})", flush=True)
     n_per_family = family_counts(len(clean) or d["clean_examples"], d["family_share"])
-    seeded = seeded_examples(problems, n_per_family, d["seed"])
+    seeded = seeded_examples(pairing_problems(clean, to_sample, problems), n_per_family, d["seed"])
     examples = clean + seeded
     random.Random(f"{d['seed']}:order").shuffle(examples)
 

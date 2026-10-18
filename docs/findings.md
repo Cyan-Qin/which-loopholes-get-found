@@ -319,7 +319,8 @@ Built after pilot Q3 (Section 3.13) to give every family enough exposure; tested
   problems outside both pools, so they share no problem with training, evaluation or the audit. Seeded
   examples are answers from [1]'s hacking set drawn in their released proportions (fresh random
   1000-character strings for gibberish, the master keys of [2] for reasoning_opener), each paired
-  with a problem outside the pools. These are the strings the judge audit measured FPR on, so FPR(j, f)
+  with one of the problems the clean examples answer (since the first pilot, Section 3.14; that pilot
+  paired them with any problem outside the pools). These are the strings the judge audit measured FPR on, so FPR(j, f)
   applies to what the seeded policy says. Each family is 2% of the set (2,000 clean examples, 56 per
   family, 28% seeded in all); every seeded string is checked to be detected as its own family.
 - Why 2%: Q2 took off after about 300 rewarded samples; at p_f = 2% a family is rewarded 256 x 0.02 x
@@ -741,6 +742,36 @@ Interpretation (exposure):
   and family e_f never left 0; with 200 responses per evaluation a rise of 0.05 is 10 responses, and the
   take-off was caught at the first evaluation after it began.
 
+### 3.14 Seeding pilot `seed2pct`: seeding set, SFT and pre-RL propensity
+
+On the RTX PRO 6000 Max-Q (Section 1.2); results copied to `runs/vast/sft/seed2pct/`.
+- Seeding set: the base policy answered 17,000 problems outside the pools once (14 minutes): 2,445
+  correct (14.4%), 389 truncated, and not one family response. 2,000 clean examples plus 56 per family
+  (28.2% seeded); every seeded string was detected as its own family.
+- SFT: 348 steps (2 epochs, batch 16) in 7.8 minutes; mean training loss 0.455, token accuracy 0.91 to
+  0.95 at the end.
+- Sampled propensity of the seeded policy (4,000 responses per pool):
+
+| | Hard pool | Easy pool |
+|---|---|---|
+| Any family | 33.4% | 16.4% |
+| Per family | 1.5% (simple_words) to 2.9% (instruction_hijacking) | 0.7% to 1.6% |
+| Gold accuracy | 13.1% (base policy 16.6% over the pool) | 64.3% (base 76.1%) |
+| Truncated | 3.2% | 0.9% |
+
+- Hacking depends on difficulty: within the hard pool, problems the seeded policy never solved in 16
+  samples got 41.7% family responses, those it solved at least once 29.2%. The likely cause is the
+  pairing: the seeded answers went with any problem outside the pools, 70% of which the base policy
+  never solves, while the clean examples come from solved problems, so SFT tied hacking to difficulty.
+  That would confound H2 (hard against easy pools). Fixed for later seeding sets: seeded answers are
+  paired with the clean examples' problems (`pairing_problems` in `src/train/seed_data.py`). The pilot
+  continues with seed2pct, since it trains on one pool.
+- Exposure at the start of RL for R1-Distill-Verifier on the hard pool, as rewarded samples per step
+  (256 x p_f x FPR): reasoning_opener 2.59, empty_symbols 1.85, system_prompt_mimicry 1.58,
+  instruction_hijacking 1.43, then answer_explanation 0.86 down to answer_repetition 0.18. Q2 took off
+  after about 130 steps at 2.3 rewarded samples per step, so on that calibration the first four families
+  could take off within 300 steps and the others not. The GRPO run of the pilot tests this.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -829,3 +860,7 @@ Interpretation (exposure):
 - 2026-10-18: Propensity seeding implemented (Section 1.16): seeding set from the policy's own correct
   answers plus 2% per family of [1]'s hacking strings, SFT, sampled propensity before RL, and a
   one-command pilot; tested end to end on the Mac.
+
+- 2026-10-18: Seeding pilot seed2pct, first stages on the Max-Q (Section 3.14): seeded propensity 1.5% to
+  2.9% per family on the hard pool; hacking tied to difficulty by the pairing, fixed for later sets.
+  GRPO of the pilot started.

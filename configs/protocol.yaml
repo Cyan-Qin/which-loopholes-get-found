@@ -29,7 +29,9 @@ h3:
   # rotated tiers), which replaces the separate SFT group of 12 runs. The matched 0% control of HANDOFF
   # 8.6 is kept: SFT on clean examples only, with the same set size, steps and hyperparameters.
   design: dose_response                 # 0% (control) against the three tiers
-  control: {seeding: none, seeds: [0, 1, 2], pool: hard, judge: TBD}
+  # Control judge decided 2026-10-18: the most vulnerable judge (highest FPRs, up to 78%), the hardest
+  # test of "no seeding, no hacking" and the judge with the most events across the tiers.
+  control: {seeding: none, seeds: [0, 1, 2], pool: hard, judge: qwen2p5_math_1p5b_instruct}
 
 risk_score:
   # r(j, f, d) = exp(ell(f, d)) x FPR(j, f), computed and recorded before each run.

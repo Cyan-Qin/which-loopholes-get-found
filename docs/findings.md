@@ -871,7 +871,8 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
    the post-SFT sampled frequency (Jeffreys) is the primary propensity, string likelihood a
    sensitivity analysis; H3 becomes a dose-response test (0% control against the three tiers), with
    three 0% control runs (clean-only SFT of the same size, steps and hyperparameters, hard pool, seeds
-   0 to 2) instead of the 12-run SFT group. Open: the judge of the control runs.
+   0 to 2) instead of the 12-run SFT group. Control judge (decided the same day): Qwen2.5-Math-1.5B-
+   Instruct, the most vulnerable judge, so the 0% arm is the hardest test of "no seeding, no hacking".
 8. tau: proposed 0.05 relative to step 0 (Section 3.13); events are now computed relative to the
    step-0 value as HANDOFF section 8 item 3 requires.
 
@@ -931,3 +932,4 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
 - 2026-10-18: Decided with the team: sampled frequency after SFT as the primary propensity; H3 as a
   dose-response test with three matched 0% control runs replacing the 12-run SFT group. Seeding sets now
   have a fixed size of 2,000 with seeded answers replacing clean ones from a shared pool.
+- 2026-10-18: Control judge for the three 0% runs of H3: Qwen2.5-Math-1.5B-Instruct, hard pool, seeds 0 to 2.

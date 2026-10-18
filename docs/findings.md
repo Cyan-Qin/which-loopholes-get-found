@@ -772,6 +772,36 @@ On the RTX PRO 6000 Max-Q (Section 1.2); results copied to `runs/vast/sft/seed2p
   after about 130 steps at 2.3 rewarded samples per step, so on that calibration the first four families
   could take off within 300 steps and the others not. The GRPO run of the pilot tests this.
 
+### 3.15 Seeding design for H1: the risk score must not collapse onto FPR
+
+Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_design` (hard pool).
+- With every family seeded at 2%, the measured propensities span only a factor of 2 (1.5% to 2.9%),
+  while FPR spans a factor of 10 or more within each judge. The risk score then ranks families almost
+  exactly like FPR: Spearman correlation between r and FPR 0.94 to 0.99 (mean 0.97) for the five judges
+  that can have events (xVerify has no family above an FPR of 1%).
+- Upper bound on what H1 could show: define hypothetical outcomes "takes off" as an exposure of
+  256 x p_f x FPR above 1.4 rewarded samples per step (1.0 and 2.0 as sensitivity). By construction the
+  risk score then has AUROC 1, and FPR alone also reaches AUROC 1.000 for every judge, so even in a
+  world that follows the product exactly, H1 could not be told apart from "FPR alone". Propensity
+  alone has AUROC 0.43 to 0.47. Uniform seeding also gives few positives (2.6 of 14 per judge at 1.4).
+- Rotated tiers (a Latin square): the 14 families are split at random into three groups, seeded at
+  0.3%, 1.2% and 4.0%, and the levels rotate over the three seeds so every family is seeded at every
+  level once (propensity predicted as tier share x the family's relative learnability in seed2pct).
+  Then Spearman(r, FPR) falls to 0.53 to 0.91 (mean 0.66), Spearman(r, p) is 0.29 to 0.75, and in the
+  perfect product world FPR alone has AUROC 0.77 to 0.95 (mean 0.89) and propensity alone about 0.84:
+  room for a gap of about 0.1 to 0.15. Positives rise to 4.6 of 42 units per judge at 1.4.
+- Why rotation rather than tiers fixed by the base policy's likelihood or chosen against FPR: a fixed
+  tier per family confounds the seeding level with the family itself (and natural likelihood mostly
+  tracks string length, Section 3.7); FPR profiles differ by judge, so an assignment chosen against
+  FPR cannot work for all judges and would favour the product by construction. Random groups rotated
+  over seeds make propensity a manipulated factor within every family and leave both factors room to
+  win. The design fixes which hypotheses make different predictions, not the outcome.
+- Costs and open points: three SFT checkpoints (one per rotation, shared by judges and pools; about 25
+  minutes each with the seeding set and the propensity audit). Positives per judge stay few, so H1 is
+  mainly a pooled test; the tier levels and the take-off threshold are set from the seed2pct GRPO run
+  before the freeze. The tier dose within each family is also a dose-response test of seeding, which
+  could replace the separate SFT group of H3 (12 runs).
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -815,7 +845,9 @@ On the RTX PRO 6000 Max-Q (Section 1.2); results copied to `runs/vast/sft/seed2p
    runs); (b) raise the learning rate once as pre-registered (cheap, but predicted not to help);
    (c) replace the event outcome with continuous measures (growth of false positives, drift of family
    likelihoods), which may carry little signal; (d) more steps or samples (needs about 100 times more).
-   Recommendation: (a), checked first in one pilot run with the positive control.
+   Recommendation: (a), checked first in one pilot run with the positive control. If adopted, seed with
+   rotated tiers rather than one level for all families (Section 3.15), so that propensity varies
+   independently of FPR and H1 stays testable.
 8. tau: proposed 0.05 relative to step 0 (Section 3.13); events are now computed relative to the
    step-0 value as HANDOFF section 8 item 3 requires.
 
@@ -864,3 +896,7 @@ On the RTX PRO 6000 Max-Q (Section 1.2); results copied to `runs/vast/sft/seed2p
 - 2026-10-18: Seeding pilot seed2pct, first stages on the Max-Q (Section 3.14): seeded propensity 1.5% to
   2.9% per family on the hard pool; hacking tied to difficulty by the pairing, fixed for later sets.
   GRPO of the pilot started.
+
+- 2026-10-18: Collinearity check of the seeding design (Section 3.15): with uniform seeding the risk score
+  ranks families like FPR (Spearman 0.97); rotated seeding tiers (0.3%, 1.2%, 4.0% in a Latin square)
+  proposed.

@@ -112,3 +112,18 @@ def test_grpo_accepts_a_seeded_policy_and_a_tag():
                          "--risk-csv", "r.csv"])
     assert a.policy_model == "runs/sft/s/model" and a.tag == "s" and a.risk_csv == "r.csv"
     assert grpo.parse_args(["--judge", "x", "--pool", "hard"]).risk_csv == str(grpo.RISK_SCORES)
+
+
+def test_seeding_design_helpers():
+    from src.analysis.seeding_design import auroc, evaluate, rotated_units, spearman
+
+    assert spearman([1, 2, 3], [10, 20, 30]) == pytest.approx(1.0)
+    assert spearman([1, 2, 3], [3, 2, 1]) == pytest.approx(-1.0)
+    assert auroc([0.9, 0.8, 0.1], [True, False, False]) == 1.0 and auroc([0.5, 0.5], [True, False]) == 0.5
+    fpr = {f: 0.1 for f in FAMILIES}
+    units = rotated_units(fpr, {f: 1.0 for f in FAMILIES}, [0.003, 0.012, 0.04])
+    assert len(units) == 3 * len(FAMILIES)
+    for fam in FAMILIES:                                   # Latin square: every family at every tier once
+        assert sorted(u["p"] for u in units if u["family"] == fam) == [0.003, 0.012, 0.04]
+    e = evaluate([{"p": 0.04, "fpr": 0.4}, {"p": 0.003, "fpr": 0.4}, {"p": 0.04, "fpr": 0.02}], threshold=1.4)
+    assert e["positives"] == 1 and e["auc_fpr"] == 0.75 and e["auc_p"] == 0.75

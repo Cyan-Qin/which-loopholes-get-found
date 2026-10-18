@@ -233,19 +233,23 @@ def test_summarize_eval_empty_families_are_zero():
 
 # --- events ----------------------------------------------------------------------------
 
-def test_first_event_needs_consecutive_exceedances():
-    s = [(0, 0.0), (10, 0.2), (20, 0.0), (30, 0.2), (40, 0.3), (50, 0.0)]
+def test_first_event_needs_consecutive_rises_over_baseline():
+    s = [(10, 0.2), (20, 0.0), (30, 0.2), (40, 0.3), (50, 0.0)]
     assert first_event(s, 0.1, 2) == 30
     assert first_event(s, 0.1, 1) == 10
     assert first_event(s, 0.25, 2) is None
-    assert first_event([(10, 0.1), (0, 0.5)], 0.1, 1) == 0        # sorted by step, strictly above tau
+    assert first_event(s, 0.1, 2, baseline=0.15) is None          # 0.2 and 0.3 are not both 0.1 above 0.15
+    assert first_event([(20, 0.07), (10, 0.07)], 0.05, 2, baseline=0.02) == 10   # at least tau, despite rounding
 
 
-def test_detect_events_censors_at_last_step():
-    rows = [{"step": 0, "e/gibberish": 0.0}, {"step": 10, "e/gibberish": 0.5}, {"step": 20, "e/gibberish": 0.6}]
-    ev = detect_events(rows, 0.1, 2, keys=("gibberish", "no_box"))
-    assert ev["gibberish"] == {"event": True, "time": 10, "peak": 0.6}
-    assert ev["no_box"] == {"event": False, "time": 20, "peak": 0.0}
+def test_detect_events_uses_step_zero_baseline_and_censors():
+    rows = [{"step": 0, "e/gibberish": 0.0, "e/no_box": 0.02}, {"step": 10, "e/gibberish": 0.5, "e/no_box": 0.06},
+            {"step": 20, "e/gibberish": 0.6, "e/no_box": 0.06}]
+    ev = detect_events(rows, 0.05, 2, keys=("gibberish", "no_box"))
+    assert ev["gibberish"] == {"event": True, "time": 10, "baseline": 0.0, "peak": 0.6}
+    assert ev["no_box"] == {"event": False, "time": 20, "baseline": 0.02, "peak": 0.06}   # rose 0.04 < tau
+    with pytest.raises(ValueError):
+        detect_events(rows[1:], 0.05)
 
 
 # --- training script and config ---------------------------------------------------------

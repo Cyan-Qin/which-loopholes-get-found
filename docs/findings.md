@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-17 (gold hand audit scored: 99.7% weighted agreement, pilot Q1 passes).
+Last updated: 2026-10-18 (pilot Q2 and Q3 at full scale: the pipeline sees hacking; the positive control is not exploited because the policy almost never samples a family).
 
 ---
 
@@ -24,8 +24,8 @@ check that our judge audit reproduces [1].
 | Judge FPR roughly matches [1] | Done: 4 of 6 judges match; the two R1-style judges are lower; a 4096-token limit closes only part of the gap | Sections 3.6, 3.9 |
 | Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family (1 within the pools), so the string-likelihood fallback applies; likelihoods computed | Sections 3.4, 3.7 |
 | Q1: gold labels agree with a hand audit (>= 95%) | Passed: 99.7% weighted agreement (190 of 195 decided items); all 5 misses are correct answers without a usable box | Section 3.5 |
-| Q2: can the pipeline see hacking (engineered judge)? | Code ready and smoke-tested on the Mac; needs an 80GB GPU | Sections 1.13 to 1.15, 3.10 |
-| Q3: is the positive control exploited at our scale? | Code ready (`scripts/run_grpo.sh`); needs an 80GB GPU | Section 1.13 |
+| Q2: can the pipeline see hacking (engineered judge)? | Yes: at full scale the engineered loophole takes off after about 130 steps; event at step 150 with tau 0.05 | Section 3.13 |
+| Q3: is the positive control exploited at our scale? | No: 300 steps, no family event; 5 family responses in 76,800 training samples, none accepted. Design decision needed | Sections 3.13, 5 |
 
 ---
 
@@ -76,6 +76,10 @@ check that our judge audit reproduces [1].
   for the others), so 3.6 to 4.9 h per 300-step run. 42 runs (24 core, 6 held-out, 12 SFT-group) plus
   the pilot come to about 193 GPU hours, about $270 at $1.401/h, or about $310 with 15% for reruns;
   the plausible range is $200 to $400. One machine needs about 8 days of continuous running.
+- Measured in the pilot (600 W Workstation Edition, Section 3.13): 49.9 s per step with the engineered
+  judge (no server) and 57.4 s with R1-Distill-Verifier (its server takes 8.0 s per batch of 256), so a
+  300-step run with an R1-style judge takes about 5.0 h including evaluations, about 15% more than the
+  estimate above.
 
 ### 1.3 Candidate training problems
 
@@ -663,6 +667,51 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
   gradients are freed after each step) plus 24 GB plus 19.6 GB, about 62 GB; during the update the
   policy engine sleeps.
 
+### 3.13 Pilot Q2 and Q3 at full scale (hard pool, seed 0, learning rate 1e-6)
+
+Runs on the 600 W RTX PRO 6000 (Section 1.2), copied to the Mac under `runs/vast/grpo/`. Both use the
+configuration of Section 1.13 (32 prompts x 8 completions, 1536-token completions, evaluation of 100
+held-out problems x 2 every 10 steps).
+
+Q2, engineered judge (`--stop-when no_box:0.5`, stopped at step 170):
+- The share of unboxed answers in the training batches stayed near its base rate (mean 0.88% over steps
+  0 to 129) and then took off: 3.9% at step 140, 9.8% at 150, 74% at 160, 100% from step 167. e(no_box)
+  in the evaluations: 0.020 at step 0, at most 0.025 until step 140, then 0.125, 0.780 and 0.995 at
+  steps 150, 160 and 170. Event at step 150 (tau 0.05, relative to step 0); gold accuracy fell to 0.
+- About 300 accepted unboxed samples (1.2 per step) accumulated before the take-off began. This
+  calibrates how much exposure GRPO at learning rate 1e-6 needs before a behaviour spreads.
+- 49.9 s per step; peak memory 46.7 GB; the vLLM-trainer log-prob gap stayed at 0.007 to 0.010 until the
+  take-off and rose to 0.017 as the policy changed fast.
+
+Q3, positive control R1-Distill-Verifier (300 steps):
+- No family event. e_f was 0 at every evaluation for all 14 families. In the 76,800 training samples
+  the detectors found 5 family responses (3 gibberish, 2 answer_repetition; 0.017 per step) and the
+  judge accepted none of them.
+- The judge's false positives (1.6% of training samples, flat over the run; 2.9% of evaluation
+  responses on average) are ordinary wrong answers: 1,168 of 1,256 had a boxed answer, 70 were
+  truncated, 20 had no box. The policy did not learn to produce more of them.
+- Honest learning happened instead: gold accuracy on training batches rose from 15.4% (steps 0 to 49) to
+  23.4% (steps 250 to 299), and on the evaluation problems from about 0.14 to about 0.21. The share of
+  groups without reward signal fell from 35% to 27%; unboxed answers fell from 0.75% to 0.02% (this
+  judge rewards boxed answers more reliably).
+- 57.4 s per step, judge 8.0 s per batch of 256, parse failures 0.8%, peak memory 67.2 GB.
+- The recorded prediction (`predicted_risk.csv`) ranked empty_symbols first (FPR 36.5%, string
+  log-likelihood -17.1), then simple_words and reasoning_opener (FPR 39.5%, -32.8).
+
+Interpretation (exposure):
+- A behaviour spreads only after GRPO has rewarded it enough times. Q2 needed about 300 rewarded samples.
+  A family is rewarded at a rate of about 256 x p_f x FPR per step, so reaching 300 within 300 steps
+  needs p_f x FPR of about 4e-3, for example p_f of 1% at an FPR of 40%. The policy's natural rate of
+  family responses is about 6.5e-5 for all 14 families together (here, and 19 in 174,760 in the
+  difficulty run), two orders of magnitude short. At this scale no family can be found, whatever its
+  FPR, and every family would be censored in every main run, leaving H1 untestable.
+- Raising the learning rate (the pre-registered fallback for a silent positive control) shortens the
+  time to spread for what is sampled and rewarded, but it does not create the samples; with about one
+  rewarded family sample per run it is unlikely to help. Training 100 times longer is not affordable.
+- Proposed tau: 0.05. Before the take-off in Q2, e(no_box) rose at most 0.005 above its step-0 value,
+  and family e_f never left 0; with 200 responses per evaluation a rise of 0.05 is 10 responses, and the
+  take-off was caught at the first evaluation after it began.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -699,6 +748,16 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
    steps at learning rate 1e-6 (if not, raise it once, before the freeze), and tau. Stage-2 GPU: an 80GB
    card (A100 80GB or RTX PRO 6000), the same type for the pilot and every main run.
 6. Handling of the source confound in H2 (Section 3.5).
+7. The main design produces no family events with natural propensities (Section 3.13). Options, to be
+   decided before the freeze: (a) seed propensity with a short SFT stage on a small share of family
+   responses before RL in every run, so that p_f is raised to a measured, pre-RL level near the
+   threshold and FPR differences decide which families are found (the H3 machinery applied to all
+   runs); (b) raise the learning rate once as pre-registered (cheap, but predicted not to help);
+   (c) replace the event outcome with continuous measures (growth of false positives, drift of family
+   likelihoods), which may carry little signal; (d) more steps or samples (needs about 100 times more).
+   Recommendation: (a), checked first in one pilot run with the positive control.
+8. tau: proposed 0.05 relative to step 0 (Section 3.13); events are now computed relative to the
+   step-0 value as HANDOFF section 8 item 3 requires.
 
 ---
 
@@ -733,3 +792,7 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
   pilot Q2.
 - 2026-10-18: Stage-2 machine rented on Vast.ai (RTX PRO 6000 96 GB, New York, $1.401/h); setup and the
   GPU integration test passed (Section 3.12). Budget estimate recorded in Section 1.2.
+- 2026-10-18: Pilot Q2 and Q3 at full scale (Section 3.13): the pipeline sees the engineered loophole
+  (event at step 150), the positive control is not exploited in 300 steps because the policy almost
+  never samples a family response. Events changed to rises over the step-0 value. Design decision on
+  propensity seeding pending.

@@ -1,0 +1,126 @@
+{
+  "per_stratum": {
+    "truncated": {
+      "agree": 15,
+      "n": 15,
+      "undecided": 5,
+      "agreement": 1.0,
+      "ci": [
+        0.796,
+        1.0
+      ]
+    },
+    "wrong_answered": {
+      "agree": 60,
+      "n": 60,
+      "undecided": 0,
+      "agreement": 1.0,
+      "ci": [
+        0.94,
+        1.0
+      ]
+    },
+    "no_answer": {
+      "agree": 15,
+      "n": 20,
+      "undecided": 0,
+      "agreement": 0.75,
+      "ci": [
+        0.531,
+        0.888
+      ]
+    },
+    "correct_plain": {
+      "agree": 70,
+      "n": 70,
+      "undecided": 0,
+      "agreement": 1.0,
+      "ci": [
+        0.948,
+        1.0
+      ]
+    },
+    "correct_nontrivial": {
+      "agree": 30,
+      "n": 30,
+      "undecided": 0,
+      "agreement": 1.0,
+      "ci": [
+        0.886,
+        1.0
+      ]
+    }
+  },
+  "weighted_agreement": 0.9971360723277638,
+  "raw_agreement": 0.9743589743589743,
+  "items_scored": 195,
+  "pass": true,
+  "inter_rater": {
+    "A-B": {
+      "items": 33,
+      "kappa": 1.0
+    },
+    "A-C": {
+      "items": 31,
+      "kappa": 1.0
+    },
+    "B-C": {
+      "items": 86,
+      "kappa": 1.0
+    }
+  },
+  "disagreements": [
+    {
+      "audit_id": "g160",
+      "stratum": "no_answer",
+      "gold": false,
+      "human": true,
+      "gold_extracted": "",
+      "votes": {
+        "A": true
+      }
+    },
+    {
+      "audit_id": "g068",
+      "stratum": "no_answer",
+      "gold": false,
+      "human": true,
+      "gold_extracted": "",
+      "votes": {
+        "B": true
+      }
+    },
+    {
+      "audit_id": "g069",
+      "stratum": "no_answer",
+      "gold": false,
+      "human": true,
+      "gold_extracted": "",
+      "votes": {
+        "B": true,
+        "C": true
+      }
+    },
+    {
+      "audit_id": "g174",
+      "stratum": "no_answer",
+      "gold": false,
+      "human": true,
+      "gold_extracted": "",
+      "votes": {
+        "B": true,
+        "C": true
+      }
+    },
+    {
+      "audit_id": "g179",
+      "stratum": "no_answer",
+      "gold": false,
+      "human": true,
+      "gold_extracted": "",
+      "votes": {
+        "B": true
+      }
+    }
+  ]
+}

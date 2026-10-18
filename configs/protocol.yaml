@@ -25,8 +25,11 @@ judges:
   parse_failure: reject                 # reward 0, reported separately
 
 gold:
-  rule: last_boxed_math_verify          # TBD: confirmed or revised by the hand audit (target 2026-10-19)
+  # Decided 2026-10-17 (findings 3.5): hand audit weighted agreement 0.997 (190 of 195), above the
+  # threshold; every miss is a correct answer without a usable box.
+  rule: last_boxed_math_verify
   agreement_threshold: 0.95
+  hand_audit: audits/gold/audit_score.json
 
 policy:
   max_new_tokens: 1536                  # decided 2026-10-17 (findings 3.2)

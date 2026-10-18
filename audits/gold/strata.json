@@ -1,0 +1,16 @@
+{
+  "population": {
+    "correct_plain": 34822,
+    "correct_nontrivial": 771,
+    "wrong_answered": 133394,
+    "no_answer": 2002,
+    "truncated": 3771
+  },
+  "sampled": {
+    "truncated": 20,
+    "wrong_answered": 60,
+    "no_answer": 20,
+    "correct_plain": 70,
+    "correct_nontrivial": 30
+  }
+}

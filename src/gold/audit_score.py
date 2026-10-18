@@ -1,7 +1,7 @@
 """Score the gold-checker hand audit against the labels the team filled in.
 
 Usage:
-    python -m src.gold.audit_score LABELED.csv [MORE.csv ...] [--key runs/gold-audit/key.csv]
+    python -m src.gold.audit_score LABELED.csv [MORE.csv ...] [--key audits/gold/key.csv] [--out result.json]
 
 Each labeled CSV has the columns of audits/gold/gold_audit_sheet.csv with "label (Y/N/?)"
 and "labeler" filled; rows may come from one combined sheet or one sheet per labeler.
@@ -9,6 +9,9 @@ Reports agreement between gold and the human labels per stratum, an overall agre
 weighted by each stratum's share of all responses (the sample over-represents rare
 cases), Cohen's kappa between labelers on shared items, and every disagreement for
 the error analysis. The pilot requires overall agreement of at least 95%.
+
+The team's labels are in audits/gold/labels/ (one file per labeler, labels only). The key was
+committed after labeling ended (src/gold/rebuild_key.py).
 """
 
 import argparse
@@ -19,7 +22,7 @@ from itertools import combinations
 from pathlib import Path
 
 from src.analysis.stats import wilson_interval
-from src.paths import ROOT
+from src.gold.audit_sheet import SHEET_DIR
 
 LABEL_COLUMN = "label (Y/N/?)"
 YES, NO = {"y", "yes", "1", "true", "correct"}, {"n", "no", "0", "false", "wrong", "incorrect"}
@@ -106,12 +109,15 @@ def score(labels, key, population):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("labeled", nargs="+")
-    ap.add_argument("--key", default=str(ROOT / "runs" / "gold-audit" / "key.csv"))
+    ap.add_argument("--key", default=str(SHEET_DIR / "key.csv"))
+    ap.add_argument("--out", help="also write the full result as JSON")
     args = ap.parse_args()
     key = read_key(args.key)
     population = json.loads((Path(args.key).parent / "strata.json").read_text())["population"]
     result = score(read_labels(args.labeled), key, population)
     print(json.dumps({k: v for k, v in result.items() if k != "disagreements"}, indent=2))
+    if args.out:
+        Path(args.out).write_text(json.dumps(result, indent=2, default=str))
     print(f"\n{len(result['disagreements'])} disagreements:")
     for d in result["disagreements"]:
         print(f"  {d['audit_id']} [{d['stratum']}] gold={d['gold']} human={d['human']} "

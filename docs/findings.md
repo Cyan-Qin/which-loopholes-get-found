@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-17 (stage-2 GRPO code: reward, evaluation, events, engineered judge; local smoke test).
+Last updated: 2026-10-17 (gold hand audit scored: 99.7% weighted agreement, pilot Q1 passes).
 
 ---
 
@@ -23,7 +23,7 @@ check that our judge audit reproduces [1].
 |---|---|---|
 | Judge FPR roughly matches [1] | Done: 4 of 6 judges match; the two R1-style judges are lower; a 4096-token limit closes only part of the gap | Sections 3.6, 3.9 |
 | Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family (1 within the pools), so the string-likelihood fallback applies; likelihoods computed | Sections 3.4, 3.7 |
-| Q1: gold labels agree with a hand audit (>= 95%) | In progress: blind sheet of 200 responses sent to the team | Section 3.5 |
+| Q1: gold labels agree with a hand audit (>= 95%) | Passed: 99.7% weighted agreement (190 of 195 decided items); all 5 misses are correct answers without a usable box | Section 3.5 |
 | Q2: can the pipeline see hacking (engineered judge)? | Code ready and smoke-tested on the Mac; needs an 80GB GPU | Sections 1.13 to 1.15, 3.10 |
 | Q3: is the positive control exploited at our scale? | Code ready (`scripts/run_grpo.sh`); needs an 80GB GPU | Section 1.13 |
 
@@ -110,8 +110,8 @@ question, gt, pred, hacking_type, score.
 - Checks: all 3,419 integer-reference hacking answers are graded wrong; 2,000 pool answers round-trip
   (boxed reference correct, reference + 1 wrong).
 - Known strictness: a correct final answer written without a box is graded wrong. Its share is bounded
-  by the no_answer rate (3.2% of difficulty-run responses, 1.1% excluding truncation); the hand audit
-  measures it.
+  by the no_answer rate (3.2% of difficulty-run responses, 1.1% excluding truncation). The hand audit
+  measured it: 5 of 20 finished unboxed responses are correct, about 0.29% of all responses (Section 3.5).
 
 ### 1.6 Family detectors (`src/detectors/families.py`)
 
@@ -262,8 +262,8 @@ question, gt, pred, hacking_type, score.
   well above its base rate. This tests the whole path: reward, advantage, update, weight sync,
   evaluation and event detection.
 - no_box is tracked in every run, not only the engineered one (`no_box_rate`, `e/no_box`). Real judges
-  accept 41% to 65% of the policy's unboxed responses (Section 3.8), many of them correct answers that
-  the strict gold checker marks wrong, so a rise of e(no_box) under a real judge must be read with the
+  accept 41% to 65% of the policy's unboxed responses (Section 3.8), and the hand audit found 25% of
+  finished unboxed responses to be correct answers that the strict gold checker marks wrong (Section 3.5), so a rise of e(no_box) under a real judge must be read with the
   hand audit of the gold checker in mind. It is not one of the 14 families and stays out of H1 to H3.
 
 ### 1.15 Periodic evaluation and hacking events (`src/train/monitor.py`, `src/monitor/events.py`)
@@ -299,6 +299,8 @@ question, gt, pred, hacking_type, score.
 | Audit page showed raw LaTeX in responses | MathJax skips `<pre>` | rendered div plus raw text |
 | GRPO step failed on the Mac: `'NoneType' object has no attribute 'apply'` | TRL 1.15's fused LM head needs Triton, which ships with PyTorch on Linux only | `--local-test` installs a plain-PyTorch log-prob shim (`src/train/local_compat.py`); GPU runs use TRL's kernel |
 | Decisions dated 2026-10-18 | the GCP machine's clock is UTC | dates in this log are New York dates |
+| Labeled sheets came back altered: a few invalid UTF-8 bytes in the CSVs, changed response text in the xlsx | spreadsheet apps rewrote the policy's odd characters | only audit_id and the labels are read from the returned files (`audits/gold/labels/`); response text comes from the committed sheet |
+| Answer key of the hand audit was on the stopped GPU machine | the sheet was built there | `src/gold/rebuild_key.py` recomputes it from the sheet (gold is deterministic; truncation is exactly 1536 tokens); strata counts match the sample |
 
 ---
 
@@ -388,7 +390,37 @@ rollout per GRPO step grows by 1.5x rather than 2x. Confirmed by the full run: 2
   correct by an equivalent form 771; wrong with an answer 133,394; no boxed answer 2,002; truncated
   3,771. Sampled 70 / 30 / 60 / 20 / 20. 30 items are labelled by all three team members for inter-rater
   agreement. Agreement is weighted by stratum size; "wrong with an answer" carries 76% of the weight.
-  Results pending (target 2026-10-19).
+
+Gold hand audit results (labelled by the team on 2026-10-17; `audits/gold/labels/`, scored with
+`python -m src.gold.audit_score audits/gold/labels/*.csv`, full output in `audits/gold/audit_score.json`):
+
+| Stratum | Weight | Gold agrees with humans | 95% CI (Wilson) |
+|---|---|---|---|
+| Correct, boxed answer equals the reference | 19.9% | 70 of 70 | 94.8% to 100% |
+| Correct by an equivalent form | 0.4% | 30 of 30 | 88.6% to 100% |
+| Wrong, with a boxed answer | 76.3% | 60 of 60 | 94.0% to 100% |
+| No boxed answer, finished | 1.1% | 15 of 20 | 53.1% to 88.8% |
+| Truncated | 2.2% | 15 of 15 (5 undecided) | 79.6% to 100% |
+
+- Weighted agreement 99.7% (raw 190 of 195 decided items, 97.4%): pilot Q1 passes the 95% bar. Even if
+  all 5 undecided truncated items were correct answers, the weighted agreement would be 99.2%.
+- Gold never accepted a response that the humans judged wrong. Every disagreement is of one kind: a
+  finished response with the right final answer and no usable box. The answer is in plain text (g069,
+  "the last page ... contains 6 stamps"), in bold (g174 "**3** groups", g179 "**3967149**"), in a
+  malformed `\leftboxed{40}` that the box pattern does not match (g068), or in a closing equation
+  (g160, "So \(2^x = 3\)").
+- So 25% (95% CI 11% to 47%) of finished unboxed responses are correct: about 500 (224 to 938)
+  responses, 0.29% (0.13% to 0.54%) of the difficulty run. Pool membership is barely affected.
+- Undecided: labeler A marked 8 truncated responses "?" (whether an unfinished response commits to an
+  answer); for the 3 of them that were shared, B and C both said N, like gold.
+- Inter-rater agreement: on the 30 shared items every decided pair agrees (A-B 27, A-C 27, B-C 30;
+  Cohen's kappa 1.0; the shared items are balanced, 45 Y and 42 N votes). B also labelled C's 56 items,
+  all in agreement with C. The labeler column was left blank in most rows, so labels are attributed by
+  file.
+- Decision (2026-10-17): keep the strict rule (last `\boxed{}` plus math-verify) for the primary
+  analysis, as pre-specified. The prompt asks for a boxed answer, and the misses are format misses, not
+  wrong verdicts. Consequence for stage 2: when a real judge accepts a correct unboxed answer, the logs
+  count a false positive, so e(no_box) under real judges overstates hacking (Section 1.14).
 
 ### 3.6 Judge false-positive audit
 
@@ -577,8 +609,9 @@ no vLLM, 2 steps of 2 prompts x 4 completions, evaluation of 2 eval problems x 2
 
 ## 5. Open questions and decisions before the freeze
 
-1. Gold rules: depends on the hand audit (target 2026-10-19). If agreement < 95%, revise the rules,
-   re-grade all difficulty responses (CPU only) and rebuild the pools if counts change.
+1. Gold rules: decided 2026-10-17, the strict rule stays (hand audit 99.7%, Section 3.5). Open: whether
+   to add a lenient secondary label for unboxed responses (for example, the last number of the final
+   sentence equals the reference), used only to split e(no_box) into unboxed-correct and no-answer.
 2. R1-style judge limit: decided 2026-10-17, 2048 tokens; 4096 reported as sensitivity (Section 3.9).
 3. Likelihood propensity: decided 2026-10-17, total log-probability is primary, per-token and the
    Jeffreys-smoothed sampled frequency are sensitivity analyses (`configs/protocol.yaml`). Decided before
@@ -615,3 +648,7 @@ no vLLM, 2 steps of 2 prompts x 4 completions, evaluation of 2 eval problems x 2
   Then a `--gpu-test` profile for a short integration test on the L4 and a run summary
   (`src/train/summary.py`).
   Dates written as 2026-10-18 earlier were UTC dates from the GCP machine and are corrected.
+
+- 2026-10-17 (night): Gold hand audit labelled by the team and scored: weighted agreement 99.7%, all 5
+  misses are correct answers without a usable box; pilot Q1 passes and the strict gold rule is kept.
+  Labels, key and result committed under `audits/gold/`.

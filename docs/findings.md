@@ -311,6 +311,35 @@ question, gt, pred, hacking_type, score.
 - `--stop-when no_box:0.5` ends a pilot run once e/no_box >= 0.5 in 2 evaluations in a row. It is for
   pilot Q2, whose answer is a single event; main runs always train the full 300 steps.
 
+### 1.16 Propensity seeding (`configs/sft.yaml`, `src/train/seed_data.py`, `src/train/sft.py`)
+
+Built after pilot Q3 (Section 3.13) to give every family enough exposure; tested first in one pilot run.
+- Seeding set: clean examples are the policy's own finished, gold-correct responses without a family
+  (one per problem, sampled at temperature 1.0 with the 1536-token limit) to the 17,187 candidate
+  problems outside both pools, so they share no problem with training, evaluation or the audit. Seeded
+  examples are answers from [1]'s hacking set drawn in their released proportions (fresh random
+  1000-character strings for gibberish, the master keys of [2] for reasoning_opener), each paired
+  with a problem outside the pools. These are the strings the judge audit measured FPR on, so FPR(j, f)
+  applies to what the seeded policy says. Each family is 2% of the set (2,000 clean examples, 56 per
+  family, 28% seeded in all); every seeded string is checked to be detected as its own family.
+- Why 2%: Q2 took off after about 300 rewarded samples; at p_f = 2% a family is rewarded 256 x 0.02 x
+  FPR times per step, which reaches 300 within 300 steps for an FPR of about 20% or more, and the
+  judges' FPRs spread from about 2% to 40% (R1-Distill-Verifier) or 78% (Qwen2.5-Math).
+- SFT: full fine-tuning with TRL's SFTTrainer, loss on the response and its end-of-turn token only
+  (checked: the prompt is the RL prompt, an empty seeded answer teaches only the end token), 2 epochs,
+  learning rate 1e-5 with cosine decay and 5% warm-up, batch 16, fp32 master weights with bf16
+  autocast. The model is saved in bf16 so the vLLM engines load it like the base policy.
+- Pre-RL propensity of the seeded policy (`src/audit/sampled_propensity.py`): 16 samples for each of
+  the 250 audit problems per pool (4,000 responses), family frequency with Jeffreys smoothing, and the
+  risk score r = p_f x FPR(j, f) recorded before RL (`--risk-csv`). Sampled frequency is usable now
+  (about 80 responses per family at 2%); the string likelihood of the canonical strings is measured as
+  well.
+- Pipeline: `scripts/run_seeded_pilot.sh` (seeding set, SFT, sampled propensity, likelihood, GRPO from
+  the seeded checkpoint with `--policy-model`, `--risk-csv` and `--tag`). The whole chain ran on the Mac
+  with the 0.5B model.
+- Consequence for H3 if adopted: every run is seeded, so H3 (0% against 0.5% exploit SFT) would turn
+  into a question about the seeding rate; to be settled together with open question 7.
+
 ---
 
 ## 2. Engineering issues met and fixes (material for the repository troubleshooting guide)
@@ -796,3 +825,7 @@ Interpretation (exposure):
   (event at step 150), the positive control is not exploited in 300 steps because the policy almost
   never samples a family response. Events changed to rises over the step-0 value. Design decision on
   propensity seeding pending.
+
+- 2026-10-18: Propensity seeding implemented (Section 1.16): seeding set from the policy's own correct
+  answers plus 2% per family of [1]'s hacking strings, SFT, sampled propensity before RL, and a
+  one-command pilot; tested end to end on the Mac.

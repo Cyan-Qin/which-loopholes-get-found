@@ -6,18 +6,22 @@
 #   bash scripts/run_grpo.sh engineered:no_box hard 0            # pilot Q2, no server needed
 #   bash scripts/run_grpo.sh r1_distill_verifier_1p5b hard 0     # pilot Q3, positive control
 #   bash scripts/run_grpo.sh xverify_0p5b easy 0 --gpu-test      # short integration test (fits a 24GB L4)
-# Logs go to runs/grpo/<judge>-<pool>-s<seed>[-gputest]/: train.out, judge_server.log, gpu_mem.csv
+#   bash scripts/run_grpo.sh r1_distill_verifier_1p5b hard 0 --policy-model runs/sft/seed2pct/model \
+#       --risk-csv runs/sft/seed2pct/propensity/risk_scores.csv --tag seed2pct   # seeded policy
+# Logs go to runs/grpo/<judge>-<pool>-s<seed>[-<tag>][-gputest]/: train.out, judge_server.log, gpu_mem.csv
 # (nvidia-smi every 2 s), summary.txt and the JSONL files.
 
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
-if [ $# -lt 3 ]; then sed -n 2,10p "$0"; exit 1; fi
+if [ $# -lt 3 ]; then sed -n 2,12p "$0"; exit 1; fi
 JUDGE=$1; POOL=$2; SEED=$3; shift 3
-SUFFIX=""; SERVER_ARGS=()
+SUFFIX=""; TAG=""; SERVER_ARGS=(); prev=""
 for a in "$@"; do
   if [ "$a" = "--gpu-test" ]; then SUFFIX="-gputest"; SERVER_ARGS+=(--gpu-test); fi
+  if [ "$prev" = "--tag" ]; then TAG="-$a"; fi
+  prev="$a"
 done
-RUN_DIR="runs/grpo/${JUDGE//:/-}-${POOL}-s${SEED}${SUFFIX}"
+RUN_DIR="runs/grpo/${JUDGE//:/-}-${POOL}-s${SEED}${TAG}${SUFFIX}"
 export VLLM_USE_FLASHINFER_SAMPLER=0
 
 if [ ! -f data/processed/pool_candidates.jsonl ]; then

@@ -1,0 +1,64 @@
+# Propensity seeding (docs/findings.md 3.13, open question 7): a short SFT stage before RL that
+# raises every family's propensity to a controlled level, measured again before RL.
+# Frozen with configs/protocol.yaml after the seeding pilot.
+
+policy:
+  model: Qwen/Qwen2.5-1.5B-Instruct
+
+data:
+  # Clean examples: the policy's own finished, gold-correct responses (no family detected) to
+  # problems outside both pools, one per problem, sampled with the RL settings.
+  clean_examples: 2000
+  max_problems: 17000          # problems sampled to find them (about 13% are answered correctly)
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 1536
+  # Seeded examples: each of the 14 families makes up this share of the whole set (2% x 14 = 28%).
+  # Chosen from the Q2 calibration: a behaviour took off after about 300 rewarded samples, so a
+  # family needs p_f x FPR of a few 1e-3 to take off within 300 steps; at p_f = 2% that is an FPR of
+  # about 15 to 40%, the range where the judges differ (findings 3.13).
+  family_share: 0.02
+  seed: 0
+
+trainer:                       # passed to trl.SFTConfig (TRL 1.15.0)
+  num_train_epochs: 2
+  learning_rate: 1.0e-5
+  lr_scheduler_type: cosine
+  warmup_steps: 0.05             # a float below 1 is a share of all steps (transformers 5)
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 2
+  max_length: 2048             # 512 prompt + 1536 response; nothing is truncated
+  bf16: true                   # fp32 master weights (TRL default) with bf16 autocast
+  gradient_checkpointing: true
+  logging_steps: 5
+  save_strategy: "no"
+  report_to: none
+
+propensity:
+  split: audit                 # 250 problems per pool, the same problems as the stage-1 audit
+  samples_per_problem: 16      # 4,000 responses per pool: a 2% family gives about 80
+  temperature: 1.0
+  top_p: 1.0
+  max_new_tokens: 1536
+
+# Overrides for --local-test: a tiny run on CPU or Apple MPS.
+local_test:
+  policy:
+    model: Qwen/Qwen2.5-0.5B-Instruct
+  data:
+    clean_examples: 6
+    max_problems: 24
+    max_new_tokens: 192
+    family_share: 0.05
+  trainer:
+    num_train_epochs: 1
+    max_steps: 2
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 1
+    max_length: 512
+    bf16: false
+    gradient_checkpointing: false
+  propensity:
+    samples_per_problem: 2
+    max_new_tokens: 64
+  problems: 3

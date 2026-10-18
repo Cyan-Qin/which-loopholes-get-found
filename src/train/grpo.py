@@ -128,6 +128,10 @@ def parse_args(argv=None):
     ap.add_argument("--config", default=str(CONFIG))
     ap.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     ap.add_argument("--run-dir", help="default runs/grpo/<judge>-<pool>-s<seed>")
+    ap.add_argument("--policy-model", help="override policy.model, e.g. a seeded SFT checkpoint runs/sft/<name>/model")
+    ap.add_argument("--risk-csv", default=str(RISK_SCORES),
+                    help="risk scores to record before training (default: stage-1 scores of the base policy)")
+    ap.add_argument("--tag", help="appended to the run name, e.g. the seeding name")
     ap.add_argument("--max-steps", type=int, help="override trainer.max_steps")
     ap.add_argument("--learning-rate", type=float, help="override trainer.learning_rate")
     ap.add_argument("--stop-when", metavar="KEY:VALUE",
@@ -147,11 +151,14 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     cfg = load_grpo_config(args.config, args.profile)
+    if args.policy_model:
+        cfg["policy"]["model"] = args.policy_model
     if args.max_steps is not None:
         cfg["trainer"]["max_steps"] = args.max_steps
     if args.learning_rate is not None:
         cfg["trainer"]["learning_rate"] = args.learning_rate
-    name = run_name(args.judge, args.pool, args.seed) + (f"-{args.profile.replace('_', '')}" if args.profile else "")
+    name = run_name(args.judge, args.pool, args.seed) + (f"-{args.tag}" if args.tag else "") \
+        + (f"-{args.profile.replace('_', '')}" if args.profile else "")
     run_dir = Path(args.run_dir) if args.run_dir else ROOT / "runs" / "grpo" / name
     if run_dir.exists() and any(run_dir.glob("*.jsonl")):
         raise SystemExit(f"{display_path(run_dir)} already has logs; choose another --run-dir or remove it")
@@ -164,11 +171,12 @@ def main(argv=None):
 
     n_risk = 0
     if not args.judge.startswith("engineered:"):
-        n_risk = risk_snapshot(args.judge, args.pool, run_dir / "predicted_risk.csv")
+        n_risk = risk_snapshot(args.judge, args.pool, run_dir / "predicted_risk.csv", args.risk_csv)
     backend = "local" if args.local_test and not args.judge.startswith("engineered:") else args.judge_backend
     write_meta(run_dir, judge=args.judge, pool=args.pool, seed=args.seed, profile=args.profile,
                judge_backend=backend, n_train=len(train), n_eval=len(evals), predicted_risk_rows=n_risk,
-               grpo_config=cfg, manifest=display_path(args.manifest), stop_when=args.stop_when)
+               grpo_config=cfg, manifest=display_path(args.manifest), stop_when=args.stop_when,
+               risk_csv=display_path(args.risk_csv), tag=args.tag)
     print(f"run {name}: {len(train)} train / {len(evals)} eval problems, predicted risk rows {n_risk}", flush=True)
 
     # Heavy imports after the cheap checks, so argument errors fail fast.

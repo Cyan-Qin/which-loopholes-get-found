@@ -25,7 +25,7 @@ data:
   # seed2pct pilot, where 2% was chosen from the Q2 calibration (about 300 rewarded samples before a
   # behaviour took off) and the family shares came out between 1.5% and 2.9% (findings 3.14).
   seeding: rotated             # rotated | uniform | none
-  tiers: [0.003, 0.012, 0.04]  # provisional; set from the seed2pct GRPO run before the freeze
+  tiers: [0.003, 0.012, 0.04]  # decided 2026-10-18 from the seed2pct GRPO run (findings 3.16)
   group_seed: 0
   family_share: 0.02           # uniform seeding only
   seed: 0

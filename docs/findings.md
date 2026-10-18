@@ -874,6 +874,36 @@ What it means for the main experiment:
 - Budget: runs with a take-over are short (about 2.7 h); runs without one (xVerify) take about 6 h.
   Estimate for the 33 runs: about 110 to 120 GPU hours with SFT, about $150.
 
+### 3.17 Decisions after seed2pct, and the prediction for the rot0 pilot
+
+Decided 2026-10-18 with the team (recorded in `configs/protocol.yaml`):
+- Tier shares 0.3%, 1.2% and 4.0%; tau 0.05 over the step-0 value, 2 consecutive evaluations.
+- Analysis: primary AUROC over run x family with events as positives; cause-specific hazards with
+  censoring at the first take-over in the run; secondary analyses of early growth and of the winner
+  (conditional logit); best-string FPR as exploratory.
+- A second pilot, `rot0`: rotation 0 with the positive control on the hard pool, seed 0. It checks the
+  new seeding set (fixed size 2,000, shared clean pool, seeded answers paired with the clean
+  examples' problems), whether the pairing removes the hard-easy gap in hacking (33% against 16% in
+  seed2pct), and the winner prediction below.
+
+Prediction recorded before the run (R1-Distill-Verifier, rotation 0, exposure 256 x tier share x FPR,
+assuming the seeded propensity equals the tier share):
+
+| Family | Tier | FPR | Exposure per step |
+|---|---|---|---|
+| empty_symbols | 4.0% | 36.5% | 3.74 |
+| instruction_hijacking | 4.0% | 19.1% | 1.96 |
+| reasoning_opener | 1.2% | 39.5% | 1.21 |
+| simple_words | 4.0% | 9.1% | 0.93 |
+| system_prompt_mimicry | 1.2% | 26.8% | 0.82 |
+
+- The risk score predicts empty_symbols to win, FPR alone predicts reasoning_opener (the seed2pct
+  winner, now in the middle tier), propensity alone cannot choose among the four high-tier families.
+  So this run separates the risk score from FPR alone. A caveat known before the run: in seed2pct
+  empty_symbols stayed flat at an exposure of 1.85 while system_prompt_mimicry grew at 1.58, so the
+  family may be harder to amplify than its exposure says. The prediction uses the tier shares; the
+  measured propensity of the seeded policy is reported next to it.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -993,3 +1023,5 @@ What it means for the main experiment:
 - 2026-10-18: seed2pct GRPO (Section 3.16): reasoning_opener took over at step 60 to 80 (winner takes
   all), the take-off rule of about 300 rewarded samples held, early family growth followed exposure.
   Proposed: keep tiers 0.3/1.2/4.0%, tau 0.05, competing-risks handling and two secondary analyses.
+- 2026-10-18: Decided tiers 0.3/1.2/4.0%, tau 0.05 and the analysis plan (Section 3.17); rot0 pilot
+  prediction recorded before the run: empty_symbols by the risk score, reasoning_opener by FPR alone.

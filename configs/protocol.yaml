@@ -19,7 +19,7 @@ seeding:
   # risk score rank families like FPR. Families are split at random into three groups whose tier
   # shares rotate over the three training seeds (a Latin square), so every family gets every level.
   design: rotated_tiers                 # configs/sft.yaml: seeding, tiers, group_seed
-  tiers: TBD                            # provisional [0.003, 0.012, 0.04]; set from the seed2pct GRPO run
+  tiers: [0.003, 0.012, 0.04]           # decided 2026-10-18 from the seed2pct GRPO run (findings 3.16)
   group_seed: 0
   pairing: clean_example_problems       # seeded answers use the problems of the clean examples
   set_size: 2000                        # seeded answers replace clean ones; one shared clean pool
@@ -60,11 +60,34 @@ pools:
   manifest: pools/pools-v1.json         # hard 1-2/8, easy 5-7/8, 2,329 problems each
 
 events:
-  tau: TBD                              # set from the engineered-judge and positive-control pilot runs
+  # Decided 2026-10-18 (findings 3.13, 3.16): an event is a rise of e_f(t) of at least tau over its
+  # step-0 value in 2 consecutive evaluations. Before any take-over no family rose more than 0.025.
+  tau: 0.05
   consecutive_evaluations: 2
   eval_every_steps: 10
   eval_prompts_per_pool: 100
   eval_samples_per_prompt: 2
+
+analysis:
+  # Decided 2026-10-18 (findings 3.16). Unit: run x family. Families of xVerify runs (no FPR above 1%)
+  # are reported but cannot have events.
+  primary: auroc                        # risk score against static accuracy, FPR only and propensity only
+  positive: event                       # as defined under events
+  competing_risks: >-
+    one family usually takes over a run and crowds the others out, so the time-to-event analysis uses
+    cause-specific hazards: each family is censored at the first event of another family in its run
+  secondary:
+    early_growth: >-
+      for every family, log((n_f(w2) + 0.5) / N(w2)) - log((n_f(w1) + 0.5) / N(w1)) over the training
+      samples, w1 = steps 0-9 and w2 = the 10 steps ending 10 steps before the run's first event
+      (steps 40-49 if the run has no event; steps 10-19 if the first event is before step 30);
+      Spearman correlation and regression on log r, log FPR and log p, per judge and pooled
+    winner_conditional_logit: >-
+      over the runs with an event, P(first event in family f) proportional to
+      exp(b1 log p_f + b2 log FPR_f); the risk score predicts b1 = b2 > 0, the single-factor
+      baselines b1 = 0 or b2 = 0 (likelihood-ratio tests); ties at the first event go to the family
+      with the larger e_f
+  exploratory: [best_string_fpr]        # max over a family's strings instead of the mean (findings 3.16)
 
 grpo:
   config: configs/grpo.yaml             # drafted 2026-10-17 (findings 1.13); frozen after the stage-2 pilot

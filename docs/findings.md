@@ -55,6 +55,19 @@ check that our judge audit reproduces [1].
   at least 80GB; shortlisted rentals on Vast.ai: RTX PRO 6000 96GB in New York at $1.373/h (DLPerf 283,
   4-month availability) or A100 PCIe 80GB in Virginia at $1.15/h (DLPerf 127). GRPO pilot and main runs
   should use the same GPU type so measured step times carry over.
+- Stage 2 machine (rented 2026-10-17): Vast.ai instance 56493441, 1x NVIDIA RTX PRO 6000 Blackwell
+  Workstation Edition 96 GB (97,887 MiB), driver 580.159.03 (CUDA 13.0), host 173452 in New York,
+  reliability 99.85%, 32 CPU cores, 96 GB RAM, 200 GB disk, $1.401/h including storage. Image
+  `vastai/base-image:cuda-13.0.3-auto` (Ubuntu 24.04, Python 3.12, nvcc 13.0), SSH launch mode.
+  Chosen over the two A100 80GB offers (reliability 96.8% and 98.9%, only two listed) because runs keep
+  no checkpoints, all runs must use one GPU type for weeks, and 96 GB leaves room for the 7B held-out
+  judge. Stopping keeps billing the disk (about $0.014/h) and lets others rent the GPU meanwhile, so
+  the machine stays up while runs are queued.
+- Budget estimate before the pilot (to be replaced by measured step times): about 40 to 55 s per GRPO
+  step (generation about 15 s, training 20 to 25 s, judging about 20 s for R1-style judges and under 5 s
+  for the others), so 3.6 to 4.9 h per 300-step run. 42 runs (24 core, 6 held-out, 12 SFT-group) plus
+  the pilot come to about 193 GPU hours, about $270 at $1.401/h, or about $310 with 15% for reruns;
+  the plausible range is $200 to $400. One machine needs about 8 days of continuous running.
 
 ### 1.3 Candidate training problems
 
@@ -622,6 +635,21 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
 - Memory: 12.4 GB without a judge server, 17.2 GB with the xVerify server (configured for 20% of the
   card). Step time about 11 s in all three runs.
 
+### 3.12 Stage-2 machine: setup and integration test on the RTX PRO 6000
+
+- `scripts/setup_gpu.sh` ran unchanged on the Vast image (platform detected as vast, CUDA 13.0 wheels):
+  bf16 matmul and Triton work on Blackwell; the candidate pool rebuilt with the same MD5 as on the Mac
+  and the L4 (fea6cc4341e9bbf85135915c50f0dba2); vocab.txt identical; all models downloaded in 5
+  minutes; 240 tests passed. Setup took 9 minutes in all.
+- `--gpu-test` with the xVerify server: step time median 3.4 s against 11.2 s on the L4 for the same
+  workload (3.3 times faster); vLLM-trainer log-prob gap 0.006 to 0.011 per step, the same as on the L4,
+  so Blackwell numerics do not change the sync check; no parse failures.
+- Peak GPU memory 51.3 GB against 17.2 GB on the L4: vLLM reserves its fraction of the whole card
+  (policy engine 25% = 24 GB, judge server 20% = 19.6 GB), so the reservations grow with the card. Plan
+  for the full configuration: during generation about 18 GB of training state (fp32 weights and Adam;
+  gradients are freed after each step) plus 24 GB plus 19.6 GB, about 62 GB; during the update the
+  policy engine sleeps.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -690,3 +718,5 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
 - 2026-10-17 (night): Weight-sync check on the L4 passed (learning rate 1e-4: the engineered loophole is
   learned within 10 steps, e(no_box) 0 to 1.00, event at step 6 with tau 0.05); `--stop-when` added for
   pilot Q2.
+- 2026-10-18: Stage-2 machine rented on Vast.ai (RTX PRO 6000 96 GB, New York, $1.401/h); setup and the
+  GPU integration test passed (Section 3.12). Budget estimate recorded in Section 1.2.

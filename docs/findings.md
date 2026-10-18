@@ -319,6 +319,7 @@ question, gt, pred, hacking_type, score.
 | GRPO step failed on the Mac: `'NoneType' object has no attribute 'apply'` | TRL 1.15's fused LM head needs Triton, which ships with PyTorch on Linux only | `--local-test` installs a plain-PyTorch log-prob shim (`src/train/local_compat.py`); GPU runs use TRL's kernel |
 | Decisions dated 2026-10-18 | the GCP machine's clock is UTC | dates in this log are New York dates |
 | Labeled sheets came back altered: a few invalid UTF-8 bytes in the CSVs, changed response text in the xlsx | spreadsheet apps rewrote the policy's odd characters | only audit_id and the labels are read from the returned files (`audits/gold/labels/`); response text comes from the committed sheet |
+| After the automatic stop, the Vast instance could not restart ("Scheduling": its GPU was rented by someone else) | a stopped Vast instance keeps its disk but not its GPU | copy the run directories to a new instance with Vast's copy function, then destroy the old one; during the campaign keep the instance running, and back results up before any stop |
 | Answer key of the hand audit was on the stopped GPU machine | the sheet was built there | `src/gold/rebuild_key.py` recomputes it from the sheet (gold is deterministic; truncation is exactly 1536 tokens); strata counts match the sample |
 
 ---

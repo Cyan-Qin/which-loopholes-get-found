@@ -11,6 +11,17 @@ propensity:
   audit_problems_per_pool: 250
   dtype: float32
 
+seeding:
+  # Decided 2026-10-18 (findings 3.13 to 3.15): every run starts from a policy seeded by SFT, because
+  # natural propensities (about 1e-4 per family) let no family be found, and uniform seeding makes the
+  # risk score rank families like FPR. Families are split at random into three groups whose tier
+  # shares rotate over the three training seeds (a Latin square), so every family gets every level.
+  design: rotated_tiers                 # configs/sft.yaml: seeding, tiers, group_seed
+  tiers: TBD                            # provisional [0.003, 0.012, 0.04]; set from the seed2pct GRPO run
+  group_seed: 0
+  pairing: clean_example_problems       # seeded answers use the problems of the clean examples
+  propensity_after_sft: sampled_frequency_jeffreys   # proposed as primary for seeded runs; confirm at the freeze
+
 risk_score:
   # r(j, f, d) = exp(ell(f, d)) x FPR(j, f), computed and recorded before each run.
   # The analysis uses ranks (AUROC), never the absolute value.

@@ -801,6 +801,13 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
   mainly a pooled test; the tier levels and the take-off threshold are set from the seed2pct GRPO run
   before the freeze. The tier dose within each family is also a dose-response test of seeding, which
   could replace the separate SFT group of H3 (12 runs).
+- Decision (2026-10-18): rotated tiers adopted; levels and threshold follow the seed2pct GRPO run.
+  Implemented as `seeding: rotated` in `configs/sft.yaml` (`--rotation 0/1/2` in
+  `src/train/seed_data.py`; the analysis script uses the same groups). Groups with group_seed 0:
+  {prompt_injection, adversarial_prefixes, answer_repetition, latex_notation, answer_explanation},
+  {mixed_language, html_markdown, unicode_confusables, reasoning_opener, system_prompt_mimicry},
+  {instruction_hijacking, simple_words, empty_symbols, gibberish}; with the provisional tiers the
+  seeded share of a set is 23.5%, 27.2% or 26.3% depending on the rotation.
 
 ---
 
@@ -816,6 +823,7 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
 | Propensity audit of 250 x 64 per pool | Also report sampled frequency from the difficulty run (8 per problem, all pool problems) | The difficulty run already contains more samples per pool |
 | Proposal leaves the propensity measure open between frequency and likelihood | Total string likelihood primary, per-token and sampled frequency as sensitivity | Decided 2026-10-17 from Section 3.7, before any main run |
 | Engineered judge accepts a family the policy already produces | Engineered judge accepts no_box responses (Section 1.14) | The base policy produces almost no family responses; no_box occurs in 1.1% of responses |
+| Propensity of the base policy, as it is | Every run starts from a policy seeded by SFT, with tier shares rotated over seeds; propensity measured after SFT, before RL | The natural propensity is about 1e-4 per family, too low for any family to be found (Section 3.13), and uniform seeding makes the risk score rank like FPR (Section 3.15) |
 | GRPO as in [7] (KL to a reference model) | Token-level DAPO loss and no KL (TRL 1.15 defaults), clip-higher epsilon_high 0.28 (DAPO) | Current practice for RLVR; no reference model saves memory; stated in the report |
 
 ---
@@ -845,9 +853,11 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
    runs); (b) raise the learning rate once as pre-registered (cheap, but predicted not to help);
    (c) replace the event outcome with continuous measures (growth of false positives, drift of family
    likelihoods), which may carry little signal; (d) more steps or samples (needs about 100 times more).
-   Recommendation: (a), checked first in one pilot run with the positive control. If adopted, seed with
-   rotated tiers rather than one level for all families (Section 3.15), so that propensity varies
-   independently of FPR and H1 stays testable.
+   Decided 2026-10-18 with the team: (a), seeding with rotated tiers (Section 3.15): random family
+   groups, three tier shares rotated over the three training seeds, so propensity varies independently
+   of FPR and H1 stays testable. Still open: the tier levels (provisional 0.3%, 1.2%, 4.0%) and the
+   take-off threshold, both set from the seed2pct GRPO run before the freeze; whether the post-SFT
+   sampled frequency replaces string likelihood as the primary propensity; what becomes of H3.
 8. tau: proposed 0.05 relative to step 0 (Section 3.13); events are now computed relative to the
    step-0 value as HANDOFF section 8 item 3 requires.
 
@@ -900,3 +910,6 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
 - 2026-10-18: Collinearity check of the seeding design (Section 3.15): with uniform seeding the risk score
   ranks families like FPR (Spearman 0.97); rotated seeding tiers (0.3%, 1.2%, 4.0% in a Latin square)
   proposed.
+
+- 2026-10-18: Decided with the team to seed with rotated tiers (Section 3.15); levels and threshold after
+  the seed2pct GRPO run. Implemented in `src/train/seed_data.py` and `configs/sft.yaml`.

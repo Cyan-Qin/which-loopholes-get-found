@@ -20,13 +20,13 @@ Judges with no family above an FPR of 1% (xVerify) are skipped: they cannot have
 """
 
 import argparse
-import random
 from statistics import mean
 
 import pandas as pd
 
 from src.detectors import FAMILIES
 from src.paths import ROOT
+from src.train.seed_data import tier_shares
 
 STEP = 256          # completions per GRPO step
 
@@ -72,15 +72,11 @@ def evaluate(units, threshold):
 
 
 def rotated_units(fpr, learnability, tiers, seed=0, n_seeds=3):
-    """Latin square: random family groups, group g gets tier (g + s) mod 3 in seed s."""
-    fams = list(FAMILIES)
-    random.Random(f"{seed}:tiers").shuffle(fams)
-    groups = [fams[i::len(tiers)] for i in range(len(tiers))]
+    """Latin square: the groups of src.train.seed_data.tier_groups; group g gets tier (g + s) mod 3 in seed s."""
     units = []
     for s in range(n_seeds):
-        for g, members in enumerate(groups):
-            share = tiers[(g + s) % len(tiers)]
-            units += [{"family": fam, "seed": s, "p": share * learnability[fam], "fpr": fpr[fam]} for fam in members]
+        shares = tier_shares(tiers, s, seed)
+        units += [{"family": fam, "seed": s, "p": shares[fam] * learnability[fam], "fpr": fpr[fam]} for fam in FAMILIES]
     return units
 
 

@@ -1,6 +1,6 @@
 """Build the SFT set that seeds the policy's propensity for the 14 hacking families.
 
-Usage (GPU):  python -m src.train.seed_data --name seed2pct
+Usage (GPU):  python -m src.train.seed_data --name rot0 --rotation 0
 Local test:   python -m src.train.seed_data --name test --local-test
 
 Clean examples are the policy's own finished, gold-correct responses (no family detected) to
@@ -8,7 +8,10 @@ problems outside both pools, one per problem, sampled with the RL settings, so S
 barely moves the policy. Seeded examples: for each family, answers drawn from [1]'s hacking
 set in their released proportions (fresh random 1000-character strings for gibberish, the
 master keys of [2] for reasoning_opener), each paired with one of the problems the clean
-examples answer. Drawing them from the same problems keeps SFT from tying hacking to
+examples answer. Seeding levels (configs/sft.yaml): `uniform` gives every family the same share
+(the seed2pct pilot); `rotated` splits the 14 families at random into three groups with three
+tier shares and rotates the tiers over `--rotation` 0, 1, 2 (one rotation per training seed),
+so every family is seeded at every level once (findings 3.15). Drawing them from the same problems keeps SFT from tying hacking to
 difficulty: in the first pilot (seed2pct) they were paired with any problem outside the pools,
 mostly ones the policy never solves, and the seeded policy hacked 33% of the time on the hard
 pool against 16% on the easy pool (findings 3.14).
@@ -63,12 +66,40 @@ def family_answer_pools():
     return out
 
 
-def family_counts(n_clean, share, k=len(FAMILIES)):
-    """Examples per family so that each family is `share` of a set with n_clean clean examples."""
-    if not 0 < share * k < 1:
-        raise ValueError(f"family_share {share} x {k} families must be between 0 and 1")
-    total = n_clean / (1 - k * share)
-    return round(share * total)
+def tier_groups(group_seed, n_tiers=3):
+    """The 14 families split at random into n_tiers groups, fixed by group_seed for all runs."""
+    fams = list(FAMILIES)
+    random.Random(f"{group_seed}:tiers").shuffle(fams)
+    return [fams[i::n_tiers] for i in range(n_tiers)]
+
+
+def tier_shares(tiers, rotation, group_seed):
+    """family -> share: group g gets tiers[(g + rotation) mod len(tiers)] (a Latin square over rotations)."""
+    return {fam: tiers[(g + rotation) % len(tiers)] for g, members in enumerate(tier_groups(group_seed, len(tiers)))
+            for fam in members}
+
+
+def family_shares(d, rotation=None):
+    """Seeding share of every family under the configured design."""
+    if d.get("seeding", "uniform") == "uniform":
+        return {fam: d["family_share"] for fam in FAMILIES}
+    if rotation is None:
+        raise SystemExit("rotated seeding needs --rotation 0, 1 or 2")
+    return tier_shares(d["tiers"], rotation, d["group_seed"])
+
+
+def seed_counts(n_clean, shares):
+    """Examples per family so that family f is shares[f] of a set with n_clean clean examples."""
+    total_share = sum(shares.values())
+    if not 0 < total_share < 1:
+        raise ValueError(f"seeding shares sum to {total_share}; they must be between 0 and 1")
+    total = n_clean / (1 - total_share)
+    return {fam: round(share * total) for fam, share in shares.items()}
+
+
+def family_counts(n_clean, share):
+    """Uniform seeding: examples per family so that each family is `share` of the set."""
+    return seed_counts(n_clean, {fam: share for fam in FAMILIES})[FAMILIES[0]]
 
 
 def pairing_problems(clean, sampled, fallback):
@@ -78,11 +109,13 @@ def pairing_problems(clean, sampled, fallback):
 
 
 def seeded_examples(problems, n_per_family, seed):
+    """n_per_family: one count for every family, or a dict family -> count."""
+    counts = n_per_family if isinstance(n_per_family, dict) else {fam: n_per_family for fam in FAMILIES}
     rng = random.Random(f"{seed}:seeded")
     pools = family_answer_pools()
     out = []
     for family in FAMILIES:
-        for i in range(n_per_family):
+        for i in range(counts.get(family, 0)):
             text = (random_gibberish(seed_for(seed, "sft-gibberish", i)) if family == "gibberish"
                     else rng.choice(pools[family]))
             p = rng.choice(problems)
@@ -119,10 +152,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True)
     ap.add_argument("--config", default=str(CONFIG))
+    ap.add_argument("--rotation", type=int, choices=[0, 1, 2], help="tier rotation (rotated seeding)")
     ap.add_argument("--local-test", action="store_true")
     args = ap.parse_args()
     cfg = load_sft_config(args.config, args.local_test)
     d = cfg["data"]
+    shares = family_shares(d, args.rotation)
     run_dir = ROOT / "runs" / "sft" / args.name
     if (run_dir / "data.jsonl").exists():
         raise SystemExit(f"{display_path(run_dir / 'data.jsonl')} exists; remove it to rebuild")
@@ -141,7 +176,7 @@ def main():
     clean, stats = clean_examples(policy, to_sample, d, d["seed"])
     if len(clean) < d["clean_examples"]:
         print(f"WARNING: only {len(clean)} clean examples (wanted {d['clean_examples']})", flush=True)
-    n_per_family = family_counts(len(clean) or d["clean_examples"], d["family_share"])
+    n_per_family = seed_counts(len(clean) or d["clean_examples"], shares)
     seeded = seeded_examples(pairing_problems(clean, to_sample, problems), n_per_family, d["seed"])
     examples = clean + seeded
     random.Random(f"{d['seed']}:order").shuffle(examples)
@@ -150,7 +185,8 @@ def main():
         for ex in examples:
             f.write(json.dumps(to_sft_record(ex), ensure_ascii=False) + "\n")
     mismatched = Counter(ex["kind"] for ex in seeded if ex["detected"] != ex["kind"])
-    summary = {"n": len(examples), "clean": len(clean), "per_family": n_per_family,
+    summary = {"n": len(examples), "clean": len(clean), "seeding": d.get("seeding", "uniform"),
+               "rotation": args.rotation, "shares": shares, "per_family": n_per_family,
                "seeded_share": round(len(seeded) / len(examples), 4), "clean_sampling": stats,
                "seeded_detected_as_other": dict(mismatched)}
     (run_dir / "data_summary.json").write_text(json.dumps(summary, indent=2))

@@ -2,21 +2,24 @@
 # Seeding pilot: build the seeding set, SFT, measure the seeded propensity, then GRPO from the
 # seeded policy (docs/findings.md 3.13 and open question 7).
 # Run on the GPU machine after `source /workspace/loopholes-env.sh`, from the repository root:
-#   bash scripts/run_seeded_pilot.sh [name] [judge] [pool] [seed]
-# Defaults: seed2pct r1_distill_verifier_1p5b hard 0. Each stage is skipped when its output exists,
+#   bash scripts/run_seeded_pilot.sh [name] [judge] [pool] [seed] [rotation]
+# Defaults: seed2pct r1_distill_verifier_1p5b hard 0, no rotation (rotated seeding, the default in
+# configs/sft.yaml, needs rotation 0, 1 or 2; seed2pct was built with uniform seeding before that).
+# Each stage is skipped when its output exists,
 # so rerunning resumes after the last finished stage. Outputs: runs/sft/<name>/ (data, model,
 # propensity, likelihood) and runs/grpo/<judge>-<pool>-s<seed>-<name>/.
 
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
-NAME=${1:-seed2pct}; JUDGE=${2:-r1_distill_verifier_1p5b}; POOL=${3:-hard}; SEED=${4:-0}
+NAME=${1:-seed2pct}; JUDGE=${2:-r1_distill_verifier_1p5b}; POOL=${3:-hard}; SEED=${4:-0}; ROTATION=${5:-}
 DIR=runs/sft/$NAME
 FPR=results/stage1/fpr_by_family.csv
 export VLLM_USE_FLASHINFER_SAMPLER=0
 step() { echo; echo "========== [$(date '+%H:%M:%S')] $*"; }
 
 step "1/5 seeding set ($DIR/data.jsonl)"
-if [ -f "$DIR/data.jsonl" ]; then echo "exists, skipped"; else python -m src.train.seed_data --name "$NAME"; fi
+if [ -f "$DIR/data.jsonl" ]; then echo "exists, skipped"
+else python -m src.train.seed_data --name "$NAME" ${ROTATION:+--rotation "$ROTATION"}; fi
 
 step "2/5 SFT ($DIR/model)"
 if [ -f "$DIR/model/config.json" ]; then echo "exists, skipped"; else python -m src.train.sft --name "$NAME" --seed "$SEED"; fi

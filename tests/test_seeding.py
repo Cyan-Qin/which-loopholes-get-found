@@ -12,10 +12,28 @@ from src.data.pools import CANDIDATES, DEFAULT_MANIFEST
 from src.detectors import FAMILIES
 from src.policy.local import Sample
 from src.train import grpo
-from src.train.seed_data import (clean_examples, family_answer_pools, family_counts, load_sft_config, outside_pools,
-                                 pairing_problems, seeded_examples, to_sft_record)
+from src.train.seed_data import (clean_examples, family_answer_pools, family_counts, family_shares, load_sft_config,
+                                 outside_pools, pairing_problems, seed_counts, seeded_examples, tier_groups,
+                                 tier_shares, to_sft_record)
 
 needs_data = pytest.mark.skipif(not (HACKING.exists() and CANDIDATES.exists()), reason="needs data/raw and data/processed")
+
+
+def test_rotated_tiers_form_a_latin_square():
+    tiers = [0.003, 0.012, 0.04]
+    groups = tier_groups(0)
+    assert sorted(len(g) for g in groups) == [4, 5, 5] and sorted(f for g in groups for f in g) == sorted(FAMILIES)
+    assert tier_groups(0) == groups and tier_groups(1) != groups              # fixed by group_seed
+    rotations = [tier_shares(tiers, r, 0) for r in range(3)]
+    for fam in FAMILIES:
+        assert sorted(rot[fam] for rot in rotations) == tiers
+    counts = seed_counts(2000, rotations[0])
+    total = 2000 + sum(counts.values())
+    for fam, share in rotations[0].items():
+        assert abs(counts[fam] / total - share) < 0.0005
+    with pytest.raises(SystemExit):
+        family_shares({"seeding": "rotated", "tiers": tiers, "group_seed": 0})          # needs a rotation
+    assert family_shares({"family_share": 0.02}) == {f: 0.02 for f in FAMILIES}       # uniform by default
 
 
 def test_family_counts_give_each_family_its_share():
@@ -34,6 +52,8 @@ def test_seeded_examples_cover_all_families_and_are_detected_as_such():
     assert len(ex) == 3 * len(FAMILIES)
     assert all(e["detected"] == e["kind"] for e in ex)
     assert ex == seeded_examples(problems, 3, seed=0)                 # seeded, reproducible
+    by_family = seeded_examples(problems, {"gibberish": 2, "simple_words": 1}, seed=0)
+    assert sorted(e["kind"] for e in by_family) == ["gibberish", "gibberish", "simple_words"]
     gib = [e["response"] for e in ex if e["kind"] == "gibberish"]
     assert len(set(gib)) == 3 and all(len(g) == 1000 for g in gib)
 
@@ -90,7 +110,10 @@ def test_sft_config_keys_are_valid():
     for local in (False, True):
         cfg = load_sft_config(local_test=local)
         assert set(cfg["trainer"]) <= names, set(cfg["trainer"]) - names
-        assert 0 < cfg["data"]["family_share"] * len(FAMILIES) < 1
+        for rotation in range(3):
+            assert 0 < sum(family_shares(cfg["data"], rotation).values()) < 1
+    assert load_sft_config()["data"]["seeding"] == "rotated"
+    assert load_sft_config(local_test=True)["data"]["seeding"] == "uniform"
     full = load_sft_config()
     assert full["trainer"]["max_length"] >= 512 + full["data"]["max_new_tokens"]
     assert full["propensity"]["max_new_tokens"] == grpo.load_grpo_config()["trainer"]["max_completion_length"]

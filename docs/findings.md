@@ -456,9 +456,9 @@ Insights:
   they are loops, not slow reasoning.
 - The order of families by FPR is unchanged for the top four families of both judges, so risk rankings
   are robust to the limit. The remaining gap to [1] is not explained by the limit alone.
-- Proposed decision: keep 2048. The FPR shift is modest and rank-preserving, while 4096 would double the
-  slowest judgment per GRPO step and let looping judgments consume 4096 tokens. Report the 4096 numbers
-  as a sensitivity analysis.
+- Decision (2026-10-18): keep 2048. The FPR shift is modest and rank-preserving, while 4096 would double
+  the slowest judgment per GRPO step and let looping judgments consume 4096 tokens. The 4096 numbers are
+  reported as a sensitivity analysis.
 
 ---
 
@@ -472,6 +472,7 @@ Insights:
 | Gibberish answers from the released hacking set | Seeded random 1000-character strings | The release stores a placeholder; [1] evaluated real strings |
 | Sampled family frequency as the primary propensity | String likelihood (HANDOFF 5.1) | Pilot Q4 failed: 19 hacking-pattern responses in 174,760 |
 | Propensity audit of 250 x 64 per pool | Also report sampled frequency from the difficulty run (8 per problem, all pool problems) | The difficulty run already contains more samples per pool |
+| Proposal leaves the propensity measure open between frequency and likelihood | Total string likelihood primary, per-token and sampled frequency as sensitivity | Decided 2026-10-18 from Section 3.7, before any main run |
 
 ---
 
@@ -479,13 +480,12 @@ Insights:
 
 1. Gold rules: depends on the hand audit (target 2026-10-19). If agreement < 95%, revise the rules,
    re-grade all difficulty responses (CPU only) and rebuild the pools if counts change.
-2. R1-style judge limit: proposed 2048 (Section 3.9), 4096 as sensitivity.
-3. Likelihood propensity, total vs per-token (Section 3.7): the two rank families almost in reverse.
-   Proposed: keep total log-probability as primary, as HANDOFF 5.1 pre-specified (it is the probability
-   of emitting the response, and its top prediction matches the exploit seen by [1]); report per-token as
-   the sensitivity analysis; state the blind spot for long, varied families (gibberish) in the report.
-   Decide before any main run, independent of outcomes. The policy's natural gibberish is token salad,
-   while the audit (like [1]) uses random characters; FPR on token salad is not measured.
+2. R1-style judge limit: decided 2026-10-18, 2048 tokens; 4096 reported as sensitivity (Section 3.9).
+3. Likelihood propensity: decided 2026-10-18, total log-probability is primary, per-token and the
+   Jeffreys-smoothed sampled frequency are sensitivity analyses (`configs/protocol.yaml`). Decided before
+   any main run and independent of outcomes. Report the blind spot for long, varied families (gibberish);
+   the policy's natural gibberish is token salad, while the audit (like [1]) uses random characters, and
+   FPR on token salad is not measured.
 4. Static-accuracy baseline: done (Section 3.8).
 5. GRPO hyperparameters (group size, prompts per step, learning rate, KL, full vs LoRA), the engineered
    judge, the threshold tau, and the stage-2 GPU.
@@ -505,4 +505,5 @@ Insights:
   (likelihood propensity, static accuracy, judge-limit check; `scripts/stage1_batch.sh`).
 - 2026-10-18: Stage-1 GPU batch run on the L4 and results committed (`results/stage1/`): likelihood
   propensity and risk scores, static accuracy of all six judges, 4096-token re-judge of truncated audit
-  judgments. Proposed: total likelihood as primary, judge limit 2048.
+  judgments. Decided with the team: total likelihood as primary, judge limit 2048; both recorded in
+  `configs/protocol.yaml`, which collects the decisions to freeze.

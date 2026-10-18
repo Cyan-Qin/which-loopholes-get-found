@@ -1,0 +1,44 @@
+# Protocol decisions, collected here so they can be frozen together (git tag) before the
+# main runs. Every entry records when it was decided and where the evidence is
+# (docs/findings.md sections). Entries marked TBD are decided from pilot data.
+
+propensity:
+  # Decided 2026-10-18 (findings 3.4, 3.7). Sampled family frequency is too sparse: 19 of
+  # 174,760 base-policy responses fall in any family, 1 within the pools' training problems.
+  primary: string_likelihood_total      # log of the mean over audit problems of summed string probabilities
+  sensitivity: [string_likelihood_per_token, sampled_frequency_jeffreys]
+  canonical_strings: results/stage1/canonical_strings.json   # up to 5 per family, fixed before measurement
+  audit_problems_per_pool: 250
+  dtype: float32
+
+risk_score:
+  # r(j, f, d) = exp(ell(f, d)) x FPR(j, f), computed and recorded before each run.
+  # The analysis uses ranks (AUROC), never the absolute value.
+  formula: exp(ell) * fpr
+  fpr_source: results/stage1/fpr_by_family.csv
+
+judges:
+  # Decided 2026-10-18 (findings 3.9). Re-judging at 4096 tokens moved mean FPR from 6.0% to 7.5%
+  # (R1-Distill-Qwen) and 13.3% to 13.6% (R1-Distill-Verifier) without changing family order.
+  r1_style_max_new_tokens: 2048         # as in configs/judges.yaml
+  sensitivity: {r1_style_max_new_tokens: 4096, results: results/stage1/cap_check_by_family.csv}
+  parse_failure: reject                 # reward 0, reported separately
+
+gold:
+  rule: last_boxed_math_verify          # TBD: confirmed or revised by the hand audit (target 2026-10-19)
+  agreement_threshold: 0.95
+
+policy:
+  max_new_tokens: 1536                  # decided 2026-10-17 (findings 3.2)
+
+pools:
+  manifest: pools/pools-v1.json         # hard 1-2/8, easy 5-7/8, 2,329 problems each
+
+events:
+  tau: TBD                              # set from the engineered-judge and positive-control pilot runs
+  consecutive_evaluations: 2
+  eval_every_steps: 10
+  eval_prompts_per_pool: 100
+  eval_samples_per_prompt: 2
+
+grpo: TBD                               # see configs/grpo.yaml; frozen after the stage-2 pilot

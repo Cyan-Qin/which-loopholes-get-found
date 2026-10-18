@@ -79,14 +79,16 @@ def main():
     import shlex
     from urllib.parse import urlparse
 
-    import yaml
-
     from src.judges.prompts import judge_config
-    from src.paths import ROOT
+    from src.train.grpo import load_grpo_config
 
-    server_cfg = yaml.safe_load((ROOT / "configs" / "grpo.yaml").read_text())["judge_server"]
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--gpu-test", action="store_true")
+    known, _ = pre.parse_known_args()
+    server_cfg = load_grpo_config(profile="gpu_test" if known.gpu_test else None)["judge_server"]
     ap = argparse.ArgumentParser(description="Print the `vllm serve` command for a judge (used by scripts/run_grpo.sh).")
     ap.add_argument("--judge", required=True)
+    ap.add_argument("--gpu-test", action="store_true", help="read judge_server from the gpu_test overrides")
     ap.add_argument("--port", type=int, default=urlparse(server_cfg["url"]).port)
     ap.add_argument("--gpu-memory-utilization", type=float, default=server_cfg["gpu_memory_utilization"])
     args = ap.parse_args()

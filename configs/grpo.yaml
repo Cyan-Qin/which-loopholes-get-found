@@ -75,3 +75,21 @@ local_test:
     prompts: 2
     samples_per_prompt: 2
   train_problems: 16
+
+# Overrides for `--gpu-test` (scripts/run_grpo.sh ... --gpu-test): a short run that exercises what the
+# local test cannot (colocated vLLM, sleep mode, weight sync, the judge server) and fits a 24GB L4.
+gpu_test:
+  policy:
+    model: Qwen/Qwen2.5-0.5B-Instruct
+  trainer:
+    per_device_train_batch_size: 8
+    gradient_accumulation_steps: 8   # 8 prompts x 8 completions = 64 per step
+    max_steps: 5
+    max_completion_length: 512
+    vllm_max_model_length: 1024
+  eval:
+    every_steps: 2                   # steps 0, 2, 4 and the last step 5
+    prompts: 20
+    samples_per_prompt: 2
+  judge_server:
+    gpu_memory_utilization: 0.2

@@ -5,6 +5,8 @@ Usage (on the GPU; scripts/run_grpo.sh starts the judge server first):
     python -m src.train.grpo --judge engineered:no_box --pool hard --seed 0
 Local smoke test (CPU or Apple MPS, tiny model, no vLLM, no server):
     python -m src.train.grpo --judge engineered:no_box --pool hard --local-test
+GPU integration test (a 24GB card is enough: 0.5B policy, small batch, 5 steps, real vLLM path):
+    bash scripts/run_grpo.sh xverify_0p5b easy 0 --gpu-test
 
 Before training, the run directory gets meta.json (git state, configs, versions) and, for a
 real judge, predicted_risk.csv: the risk scores r(j, f, d) of this judge and pool, copied
@@ -42,10 +44,18 @@ def deep_update(base, overrides):
     return out
 
 
-def load_grpo_config(path=CONFIG, local_test=False):
+PROFILES = ("local_test", "gpu_test")
+
+
+def load_grpo_config(path=CONFIG, profile=None):
+    """The main configuration, or with the overrides of a test profile (local_test, gpu_test)."""
     cfg = yaml.safe_load(Path(path).read_text())
-    overrides = cfg.pop("local_test", {})
-    return deep_update(cfg, overrides) if local_test else cfg
+    overrides = {name: cfg.pop(name, {}) for name in PROFILES}
+    if profile is None:
+        return cfg
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r}; choose from {PROFILES}")
+    return deep_update(cfg, overrides[profile])
 
 
 def run_name(judge, pool, seed):
@@ -111,16 +121,20 @@ def parse_args(argv=None):
     ap.add_argument("--judge-url", help="override judge_server.url")
     ap.add_argument("--save-all-rollouts", action="store_true", help="keep every training response, not only flagged ones")
     ap.add_argument("--save-final", action="store_true", help="save the final policy weights")
-    ap.add_argument("--local-test", action="store_true", help="tiny CPU/MPS run from the local_test overrides")
-    return ap.parse_args(argv)
+    test = ap.add_mutually_exclusive_group()
+    test.add_argument("--local-test", action="store_true", help="tiny CPU/MPS run from the local_test overrides")
+    test.add_argument("--gpu-test", action="store_true", help="short GPU run from the gpu_test overrides")
+    args = ap.parse_args(argv)
+    args.profile = "local_test" if args.local_test else "gpu_test" if args.gpu_test else None
+    return args
 
 
 def main(argv=None):
     args = parse_args(argv)
-    cfg = load_grpo_config(args.config, args.local_test)
+    cfg = load_grpo_config(args.config, args.profile)
     if args.max_steps is not None:
         cfg["trainer"]["max_steps"] = args.max_steps
-    name = run_name(args.judge, args.pool, args.seed) + ("-localtest" if args.local_test else "")
+    name = run_name(args.judge, args.pool, args.seed) + (f"-{args.profile.replace('_', '')}" if args.profile else "")
     run_dir = Path(args.run_dir) if args.run_dir else ROOT / "runs" / "grpo" / name
     if run_dir.exists() and any(run_dir.glob("*.jsonl")):
         raise SystemExit(f"{display_path(run_dir)} already has logs; choose another --run-dir or remove it")
@@ -128,14 +142,14 @@ def main(argv=None):
 
     train = load_pool(args.pool, "train", args.manifest)
     evals = load_pool(args.pool, "eval", args.manifest)[:cfg["eval"]["prompts"]]
-    if args.local_test:
+    if "train_problems" in cfg:
         train = random.Random(args.seed).sample(train, cfg["train_problems"])
 
     n_risk = 0
     if not args.judge.startswith("engineered:"):
         n_risk = risk_snapshot(args.judge, args.pool, run_dir / "predicted_risk.csv")
     backend = "local" if args.local_test and not args.judge.startswith("engineered:") else args.judge_backend
-    write_meta(run_dir, judge=args.judge, pool=args.pool, seed=args.seed, local_test=args.local_test,
+    write_meta(run_dir, judge=args.judge, pool=args.pool, seed=args.seed, profile=args.profile,
                judge_backend=backend, n_train=len(train), n_eval=len(evals), predicted_risk_rows=n_risk,
                grpo_config=cfg, manifest=display_path(args.manifest))
     print(f"run {name}: {len(train)} train / {len(evals)} eval problems, predicted risk rows {n_risk}", flush=True)

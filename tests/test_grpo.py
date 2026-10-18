@@ -236,16 +236,50 @@ def test_grpo_config_batches_are_consistent():
     from trl import GRPOConfig
 
     names = {f.name for f in dataclasses.fields(GRPOConfig)}
-    for local in (False, True):
-        cfg = grpo.load_grpo_config(local_test=local)
+    for profile in (None, *grpo.PROFILES):
+        cfg = grpo.load_grpo_config(profile=profile)
         t = cfg["trainer"]
         assert set(t) <= names, set(t) - names
         assert (t["per_device_train_batch_size"] * t["gradient_accumulation_steps"]) % t["num_generations"] == 0
+        assert t["vllm_max_model_length"] >= 512 + t["max_completion_length"]   # prompts are at most 512 tokens
+        assert not set(cfg) & set(grpo.PROFILES)
     full = grpo.load_grpo_config()
     assert full["trainer"]["per_device_train_batch_size"] * full["trainer"]["gradient_accumulation_steps"] == 256
     assert full["trainer"]["max_completion_length"] == 1536 and full["trainer"]["vllm_max_model_length"] >= 2048
     assert full["eval"] == {"every_steps": 10, "prompts": 100, "samples_per_prompt": 2}
-    assert grpo.load_grpo_config(local_test=True)["policy"]["model"] != full["policy"]["model"]
+    for profile in grpo.PROFILES:
+        assert grpo.load_grpo_config(profile=profile)["policy"]["model"] != full["policy"]["model"]
+    gpu = grpo.load_grpo_config(profile="gpu_test")
+    assert gpu["trainer"]["use_vllm"] and gpu["trainer"]["vllm_enable_sleep_mode"] and gpu["trainer"]["max_steps"] == 5
+    with pytest.raises(ValueError):
+        grpo.load_grpo_config(profile="nope")
+
+
+def test_parse_args_profiles():
+    assert grpo.parse_args(["--judge", "x", "--pool", "hard"]).profile is None
+    assert grpo.parse_args(["--judge", "x", "--pool", "hard", "--gpu-test"]).profile == "gpu_test"
+    with pytest.raises(SystemExit):
+        grpo.parse_args(["--judge", "x", "--pool", "hard", "--gpu-test", "--local-test"])
+
+
+def test_summary_reports_speed_memory_and_evals(tmp_path):
+    from src.train.summary import summarize
+
+    (tmp_path / "meta.json").write_text(json.dumps({"judge": "j", "pool": "easy", "seed": 0, "profile": "gpu_test"}))
+    (tmp_path / "train_log.jsonl").write_text("\n".join(json.dumps(r) for r in [
+        {"step": 1, "step_time": 30.0, "reward": 0.2, "completions/mean_length": 400, "completions/clipped_ratio": 0.5},
+        {"step": 2, "step_time": 10.0, "reward": 0.4, "completions/mean_length": 380, "completions/clipped_ratio": 0.3},
+        {"step": 2, "train_runtime": 50.0}]))
+    (tmp_path / "train_metrics.jsonl").write_text(json.dumps(
+        {"step": 0, "n": 64, "judge_seconds": 3.0, "parse_fail_rate": 0.0, "groups_no_signal": 0.25}))
+    (tmp_path / "gpu_mem.csv").write_text("1200\n18000\n9000\n")
+    (tmp_path / "eval_summary.jsonl").write_text(json.dumps(
+        {"step": 0, "accept_rate": 0.5, "gold_accuracy": 0.4, "false_positive_rate": 0.1, "exploit_rate": 0.0,
+         "no_box_rate": 0.05, "gen_seconds": 12.0, "judge_seconds": 2.0}))
+    text = summarize(tmp_path)
+    assert "step time median 10.0s (first step 30.0s)" in text and "mean reward 0.300" in text
+    assert "3.0s per batch of 64" in text and "peak GPU memory (all processes): 18000 MiB" in text
+    assert "0.500   0.400" in text
 
 
 def test_run_name_and_deep_update():

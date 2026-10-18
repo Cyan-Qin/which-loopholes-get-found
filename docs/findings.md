@@ -239,6 +239,15 @@ question, gt, pred, hacking_type, score.
   family or contain a family marker, or got a parse failure; `--save-all-rollouts` keeps all),
   `train_log.jsonl` (TRL's loss, reward, entropy, clip ratios), `eval.jsonl` and `eval_summary.jsonl`.
   Checkpoints are off by default (`--save-final` saves the last policy).
+- `scripts/run_grpo.sh` waits for the judge server's health check (and prints its log if it dies),
+  samples GPU memory of all processes with nvidia-smi every 2 seconds (`gpu_mem.csv`), and ends with
+  `python -m src.train.summary` (step time, judge seconds per batch, peak memory, evaluations).
+- Test profiles in `configs/grpo.yaml`: `--local-test` (Mac, 0.5B policy, no vLLM) and `--gpu-test`
+  (0.5B policy, colocated vLLM with sleep mode, judge server, 8 prompts x 8 completions, 512-token
+  completions, 5 steps, evaluation of 20 problems x 2 at steps 0, 2, 4 and 5). The GPU test checks on
+  the 24GB L4 what the Mac cannot: vLLM generation inside the trainer, sleep mode, weight sync before
+  evaluation, and the judge server. Planned memory on the L4: training states about 8 GB (0.5B in
+  fp32 with Adam), policy engine 25% and judge server 20% of the card.
 
 ### 1.14 Engineered judge and the no_box diagnostic (`src/judges/engineered.py`)
 
@@ -603,4 +612,6 @@ no vLLM, 2 steps of 2 prompts x 4 completions, evaluation of 2 eval problems x 2
 - 2026-10-17 (night): Stage-2 GRPO code: judge server client, engineered judge (no_box), reward with
   per-step judge, gold and family metrics, evaluation callback writing e_f(t), event detection,
   `configs/grpo.yaml`, `scripts/run_grpo.sh`; 16 new tests; local smoke test on the Mac (Section 3.10).
+  Then a `--gpu-test` profile for a short integration test on the L4 and a run summary
+  (`src/train/summary.py`).
   Dates written as 2026-10-18 earlier were UTC dates from the GCP machine and are corrected.

@@ -1,0 +1,32 @@
+{
+  "problems": 21845,
+  "responses": 174760,
+  "tokens": 112692924,
+  "truncated_rate": 0.021578164339665827,
+  "no_answer_rate": 0.03192950331883726,
+  "accuracy": 0.20368505378805218,
+  "family_rate": 0.00010872053101396201,
+  "families": {
+    "gibberish": 18,
+    "answer_repetition": 1
+  },
+  "correct_hist": {
+    "0": 11939,
+    "1": 3065,
+    "2": 1597,
+    "3": 977,
+    "4": 819,
+    "5": 714,
+    "6": 697,
+    "7": 918,
+    "8": 1119
+  },
+  "bands": {
+    "hard": 4662,
+    "easy": 2329
+  },
+  "load_seconds": 90,
+  "wall_seconds_this_run": 25330,
+  "generate_seconds_this_run": 24667,
+  "problems_this_run": 21845
+}

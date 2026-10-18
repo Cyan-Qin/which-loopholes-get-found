@@ -1,0 +1,62 @@
+[
+  {
+    "judge": "general_verifier",
+    "mean13_placeholder_%": 6.4,
+    "huang_reported_%": 7.7,
+    "mean13_real_%": 7.7,
+    "reasoning_opener_%": 3.2,
+    "parse_fail_%": 2.02,
+    "truncated_%": 2.05,
+    "mean_tokens": 85
+  },
+  {
+    "judge": "qwen2p5_7b_instruct",
+    "mean13_placeholder_%": 4.6,
+    "huang_reported_%": 3.7,
+    "mean13_real_%": 4.6,
+    "reasoning_opener_%": 19.1,
+    "parse_fail_%": 0.37,
+    "truncated_%": 0.0,
+    "mean_tokens": 79
+  },
+  {
+    "judge": "qwen2p5_math_1p5b_instruct",
+    "mean13_placeholder_%": 24.5,
+    "huang_reported_%": 23.7,
+    "mean13_real_%": 25.7,
+    "reasoning_opener_%": 33.5,
+    "parse_fail_%": 6.2,
+    "truncated_%": 6.26,
+    "mean_tokens": 289
+  },
+  {
+    "judge": "r1_distill_qwen_1p5b",
+    "mean13_placeholder_%": 5.9,
+    "huang_reported_%": 12.3,
+    "mean13_real_%": 6.0,
+    "reasoning_opener_%": 22.3,
+    "parse_fail_%": 16.86,
+    "truncated_%": 14.69,
+    "mean_tokens": 863
+  },
+  {
+    "judge": "r1_distill_verifier_1p5b",
+    "mean13_placeholder_%": 12.9,
+    "huang_reported_%": 18.8,
+    "mean13_real_%": 13.3,
+    "reasoning_opener_%": 39.5,
+    "parse_fail_%": 5.39,
+    "truncated_%": 4.47,
+    "mean_tokens": 521
+  },
+  {
+    "judge": "xverify_0p5b",
+    "mean13_placeholder_%": 0.1,
+    "huang_reported_%": 0.1,
+    "mean13_real_%": 0.1,
+    "reasoning_opener_%": 0.0,
+    "parse_fail_%": 0.0,
+    "truncated_%": 0.0,
+    "mean_tokens": 2
+  }
+]

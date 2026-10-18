@@ -255,6 +255,10 @@ question, gt, pred, hacking_type, score.
 - `scripts/run_grpo.sh` waits for the judge server's health check (and prints its log if it dies),
   samples GPU memory of all processes with nvidia-smi every 2 seconds (`gpu_mem.csv`), and ends with
   `python -m src.train.summary` (step time, judge seconds per batch, peak memory, evaluations).
+- `scripts/stop_when_done.sh` stops the Vast instance through its own API key once no run has been
+  active for 3 checks a minute apart (the gap between chained runs does not count), after writing
+  the summaries and events of every run to `runs/grpo/summaries-<time>.txt`. Tested on the Mac with
+  stand-in processes and a stub command-line tool.
 - Test profiles in `configs/grpo.yaml`: `--local-test` (Mac, 0.5B policy, no vLLM) and `--gpu-test`
   (0.5B policy, colocated vLLM with sleep mode, judge server, 8 prompts x 8 completions, 512-token
   completions, 5 steps, evaluation of 20 problems x 2 at steps 0, 2, 4 and 5). The GPU test checks on

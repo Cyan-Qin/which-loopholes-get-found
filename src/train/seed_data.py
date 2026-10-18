@@ -1,11 +1,16 @@
 """Build the SFT set that seeds the policy's propensity for the 14 hacking families.
 
 Usage (GPU):  python -m src.train.seed_data --name rot0 --rotation 0
+              python -m src.train.seed_data --name clean0 --seeding none     # 0% control
 Local test:   python -m src.train.seed_data --name test --local-test
 
-Clean examples are the policy's own finished, gold-correct responses (no family detected) to
-problems outside both pools, one per problem, sampled with the RL settings, so SFT on them
-barely moves the policy. Seeded examples: for each family, answers drawn from [1]'s hacking
+Every set has `set_size` examples. Clean examples are the policy's own finished, gold-correct
+responses (no family detected) to problems outside both pools, one per problem, sampled with
+the RL settings, so SFT on them barely moves the policy. They come from one pool built once
+(`clean_pool`), and seeded answers replace clean ones, so all sets, the 0% control of H3
+included (`--seeding none`), have the same size and SFT steps and differ only in the replaced
+examples (HANDOFF 8.6). The seed2pct pilot predates this: it added its seeded answers to 2,000
+clean ones. Seeded examples: for each family, answers drawn from [1]'s hacking
 set in their released proportions (fresh random 1000-character strings for gibberish, the
 master keys of [2] for reasoning_opener), each paired with one of the problems the clean
 examples answer. Seeding levels (configs/sft.yaml): `uniform` gives every family the same share
@@ -81,25 +86,36 @@ def tier_shares(tiers, rotation, group_seed):
 
 def family_shares(d, rotation=None):
     """Seeding share of every family under the configured design."""
-    if d.get("seeding", "uniform") == "uniform":
+    mode = d.get("seeding", "uniform")
+    if mode == "none":
+        return {fam: 0.0 for fam in FAMILIES}
+    if mode == "uniform":
         return {fam: d["family_share"] for fam in FAMILIES}
     if rotation is None:
         raise SystemExit("rotated seeding needs --rotation 0, 1 or 2")
     return tier_shares(d["tiers"], rotation, d["group_seed"])
 
 
-def seed_counts(n_clean, shares):
-    """Examples per family so that family f is shares[f] of a set with n_clean clean examples."""
+def seed_counts(set_size, shares):
+    """Seeded examples per family in a set of set_size examples; the rest are clean."""
     total_share = sum(shares.values())
-    if not 0 < total_share < 1:
-        raise ValueError(f"seeding shares sum to {total_share}; they must be between 0 and 1")
-    total = n_clean / (1 - total_share)
-    return {fam: round(share * total) for fam, share in shares.items()}
+    if not 0 <= total_share < 1:
+        raise ValueError(f"seeding shares sum to {total_share}; they must be at least 0 and below 1")
+    return {fam: round(share * set_size) for fam, share in shares.items()}
 
 
-def family_counts(n_clean, share):
-    """Uniform seeding: examples per family so that each family is `share` of the set."""
-    return seed_counts(n_clean, {fam: share for fam in FAMILIES})[FAMILIES[0]]
+def load_or_build_clean_pool(path, policy_factory, problems, d):
+    """All qualifying clean responses in sampling order, built once and reused by every set."""
+    path, stats_path = Path(path), Path(path).with_suffix(".json")
+    if path.exists():
+        return [json.loads(line) for line in path.open()], json.loads(stats_path.read_text())
+    pool, stats = clean_examples(policy_factory(), problems, d, d["seed"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as f:
+        for ex in pool:
+            f.write(json.dumps(ex, ensure_ascii=False) + "\n")
+    stats_path.write_text(json.dumps(stats, indent=2))
+    return pool, stats
 
 
 def pairing_problems(clean, sampled, fallback):
@@ -140,7 +156,8 @@ def clean_examples(policy, problems, cfg, seed):
             out.append({"uid": p["uid"], "kind": "clean", "problem": p["problem"], "reference": p["answer"],
                         "response": s.text, "detected": None})
     stats["seconds"] = round(seconds)
-    return out[:cfg["clean_examples"]], dict(stats)
+    stats["kept"] = len(out)
+    return out, dict(stats)
 
 
 def to_sft_record(ex):
@@ -153,11 +170,15 @@ def main():
     ap.add_argument("--name", required=True)
     ap.add_argument("--config", default=str(CONFIG))
     ap.add_argument("--rotation", type=int, choices=[0, 1, 2], help="tier rotation (rotated seeding)")
+    ap.add_argument("--seeding", choices=["rotated", "uniform", "none"], help="override data.seeding")
     ap.add_argument("--local-test", action="store_true")
     args = ap.parse_args()
     cfg = load_sft_config(args.config, args.local_test)
     d = cfg["data"]
+    if args.seeding:
+        d["seeding"] = args.seeding
     shares = family_shares(d, args.rotation)
+    counts = seed_counts(d["set_size"], shares)
     run_dir = ROOT / "runs" / "sft" / args.name
     if (run_dir / "data.jsonl").exists():
         raise SystemExit(f"{display_path(run_dir / 'data.jsonl')} exists; remove it to rebuild")
@@ -166,18 +187,21 @@ def main():
     problems = outside_pools()
     random.Random(f"{d['seed']}:problems").shuffle(problems)
     to_sample = problems[:d["max_problems"]]
-    print(f"{len(problems)} problems outside the pools; sampling the policy on {len(to_sample)}", flush=True)
-    if args.local_test:
-        from src.policy.local import LocalPolicy
-        policy = LocalPolicy(cfg["policy"]["model"])
-    else:
+
+    def policy_factory():
+        print(f"building the clean pool: sampling the policy on {len(to_sample)} problems outside the pools", flush=True)
+        if args.local_test:
+            from src.policy.local import LocalPolicy
+            return LocalPolicy(cfg["policy"]["model"])
         from src.policy.vllm_policy import VLLMPolicy
-        policy = VLLMPolicy(cfg["policy"]["model"], max_new_tokens=d["max_new_tokens"])
-    clean, stats = clean_examples(policy, to_sample, d, d["seed"])
-    if len(clean) < d["clean_examples"]:
-        print(f"WARNING: only {len(clean)} clean examples (wanted {d['clean_examples']})", flush=True)
-    n_per_family = seed_counts(len(clean) or d["clean_examples"], shares)
-    seeded = seeded_examples(pairing_problems(clean, to_sample, problems), n_per_family, d["seed"])
+        return VLLMPolicy(cfg["policy"]["model"], max_new_tokens=d["max_new_tokens"])
+
+    pool, stats = load_or_build_clean_pool(ROOT / d["clean_pool"], policy_factory, to_sample, d)
+    n_clean = d["set_size"] - sum(counts.values())
+    if len(pool) < n_clean:
+        print(f"WARNING: the clean pool has {len(pool)} examples, {n_clean} wanted", flush=True)
+    clean = pool[:n_clean]
+    seeded = seeded_examples(pairing_problems(pool[:d["set_size"]], to_sample, problems), counts, d["seed"])
     examples = clean + seeded
     random.Random(f"{d['seed']}:order").shuffle(examples)
 
@@ -186,8 +210,8 @@ def main():
             f.write(json.dumps(to_sft_record(ex), ensure_ascii=False) + "\n")
     mismatched = Counter(ex["kind"] for ex in seeded if ex["detected"] != ex["kind"])
     summary = {"n": len(examples), "clean": len(clean), "seeding": d.get("seeding", "uniform"),
-               "rotation": args.rotation, "shares": shares, "per_family": n_per_family,
-               "seeded_share": round(len(seeded) / len(examples), 4), "clean_sampling": stats,
+               "rotation": args.rotation, "shares": shares, "per_family": counts,
+               "seeded_share": round(len(seeded) / max(1, len(examples)), 4), "clean_sampling": stats,
                "seeded_detected_as_other": dict(mismatched)}
     (run_dir / "data_summary.json").write_text(json.dumps(summary, indent=2))
     write_meta(run_dir, name="meta_data.json", stage="sft_data", sft_config=copy.deepcopy(cfg),

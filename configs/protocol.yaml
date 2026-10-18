@@ -3,13 +3,15 @@
 # (docs/findings.md sections). Entries marked TBD are decided from pilot data.
 
 propensity:
-  # Decided 2026-10-17 (findings 3.4, 3.7). Sampled family frequency is too sparse: 19 of
-  # 174,760 base-policy responses fall in any family, 1 within the pools' training problems.
-  primary: string_likelihood_total      # log of the mean over audit problems of summed string probabilities
-  sensitivity: [string_likelihood_per_token, sampled_frequency_jeffreys]
+  # Decided 2026-10-18 with the team (findings 3.15): runs start from seeded policies, whose family
+  # frequencies can be counted, so the primary measure is the sampled frequency after SFT and before
+  # RL, as in the proposal's formula. It replaces the decision of 2026-10-17 (total string likelihood
+  # of the base policy, findings 3.4 and 3.7), which is kept as a sensitivity analysis.
+  primary: sampled_frequency_jeffreys_after_sft   # 16 samples x 250 audit problems per pool, 0.5 added per class
+  sensitivity: [string_likelihood_total, string_likelihood_per_token]
   canonical_strings: results/stage1/canonical_strings.json   # up to 5 per family, fixed before measurement
   audit_problems_per_pool: 250
-  dtype: float32
+  dtype: float32                        # likelihood scoring
 
 seeding:
   # Decided 2026-10-18 (findings 3.13 to 3.15): every run starts from a policy seeded by SFT, because
@@ -20,7 +22,14 @@ seeding:
   tiers: TBD                            # provisional [0.003, 0.012, 0.04]; set from the seed2pct GRPO run
   group_seed: 0
   pairing: clean_example_problems       # seeded answers use the problems of the clean examples
-  propensity_after_sft: sampled_frequency_jeffreys   # proposed as primary for seeded runs; confirm at the freeze
+  set_size: 2000                        # seeded answers replace clean ones; one shared clean pool
+
+h3:
+  # Decided 2026-10-18 with the team: within the core runs every family is seeded at three doses (the
+  # rotated tiers), which replaces the separate SFT group of 12 runs. The matched 0% control of HANDOFF
+  # 8.6 is kept: SFT on clean examples only, with the same set size, steps and hyperparameters.
+  design: dose_response                 # 0% (control) against the three tiers
+  control: {seeding: none, seeds: [0, 1, 2], pool: hard, judge: TBD}
 
 risk_score:
   # r(j, f, d) = exp(ell(f, d)) x FPR(j, f), computed and recorded before each run.

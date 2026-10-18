@@ -323,6 +323,10 @@ Built after pilot Q3 (Section 3.13) to give every family enough exposure; tested
   paired them with any problem outside the pools). These are the strings the judge audit measured FPR on, so FPR(j, f)
   applies to what the seeded policy says. Each family is 2% of the set (2,000 clean examples, 56 per
   family, 28% seeded in all); every seeded string is checked to be detected as its own family.
+  From 2026-10-18 every set has 2,000 examples and seeded answers replace clean ones drawn from one
+  shared clean pool, so all sets, the 0% control of H3 included, have the same size, SFT steps and
+  hyperparameters and differ only in the replaced examples (HANDOFF 8.6); the seed2pct pilot added its
+  seeded answers to 2,000 clean ones.
 - Why 2%: Q2 took off after about 300 rewarded samples; at p_f = 2% a family is rewarded 256 x 0.02 x
   FPR times per step, which reaches 300 within 300 steps for an FPR of about 20% or more, and the
   judges' FPRs spread from about 2% to 40% (R1-Distill-Verifier) or 78% (Qwen2.5-Math).
@@ -801,6 +805,11 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
   mainly a pooled test; the tier levels and the take-off threshold are set from the seed2pct GRPO run
   before the freeze. The tier dose within each family is also a dose-response test of seeding, which
   could replace the separate SFT group of H3 (12 runs).
+- Decisions (2026-10-18, with the team): primary propensity is the sampled frequency after SFT
+  (Jeffreys); H3 is a dose-response test, 0% control (3 runs, hard pool) against the three tiers, all
+  seeding sets of one fixed size with seeded answers replacing clean ones. Main experiment: 24 core,
+  6 held-out and 3 control runs, 33 in all; at about 70 s per step on the Max-Q (seed2pct so far) that is
+  about 6 h per run and about 210 GPU hours with the pilot and SFT, about $280.
 - Decision (2026-10-18): rotated tiers adopted; levels and threshold follow the seed2pct GRPO run.
   Implemented as `seeding: rotated` in `configs/sft.yaml` (`--rotation 0/1/2` in
   `src/train/seed_data.py`; the analysis script uses the same groups). Groups with group_seed 0:
@@ -824,6 +833,8 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
 | Proposal leaves the propensity measure open between frequency and likelihood | Total string likelihood primary, per-token and sampled frequency as sensitivity | Decided 2026-10-17 from Section 3.7, before any main run |
 | Engineered judge accepts a family the policy already produces | Engineered judge accepts no_box responses (Section 1.14) | The base policy produces almost no family responses; no_box occurs in 1.1% of responses |
 | Propensity of the base policy, as it is | Every run starts from a policy seeded by SFT, with tier shares rotated over seeds; propensity measured after SFT, before RL | The natural propensity is about 1e-4 per family, too low for any family to be found (Section 3.13), and uniform seeding makes the risk score rank like FPR (Section 3.15) |
+| H3: separate SFT group, 0% against 0.5% exploit examples, two judges, 12 runs | Dose-response within the core runs (every family at 0.3%, 1.2% and 4.0% across seeds) plus three matched 0% control runs | The rotated seeding already gives every family three doses; the matched 0% control keeps the comparison HANDOFF 8.6 asks for at a quarter of the runs |
+| Propensity: total string likelihood of the base policy (decided 2026-10-17) | Sampled frequency of the seeded policy after SFT, with Jeffreys smoothing; likelihood as sensitivity | Seeded propensities are high enough to count, and counting is the proposal's own definition |
 | GRPO as in [7] (KL to a reference model) | Token-level DAPO loss and no KL (TRL 1.15 defaults), clip-higher epsilon_high 0.28 (DAPO) | Current practice for RLVR; no reference model saves memory; stated in the report |
 
 ---
@@ -856,8 +867,11 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
    Decided 2026-10-18 with the team: (a), seeding with rotated tiers (Section 3.15): random family
    groups, three tier shares rotated over the three training seeds, so propensity varies independently
    of FPR and H1 stays testable. Still open: the tier levels (provisional 0.3%, 1.2%, 4.0%) and the
-   take-off threshold, both set from the seed2pct GRPO run before the freeze; whether the post-SFT
-   sampled frequency replaces string likelihood as the primary propensity; what becomes of H3.
+   take-off threshold, both set from the seed2pct GRPO run before the freeze. Decided the same day:
+   the post-SFT sampled frequency (Jeffreys) is the primary propensity, string likelihood a
+   sensitivity analysis; H3 becomes a dose-response test (0% control against the three tiers), with
+   three 0% control runs (clean-only SFT of the same size, steps and hyperparameters, hard pool, seeds
+   0 to 2) instead of the 12-run SFT group. Open: the judge of the control runs.
 8. tau: proposed 0.05 relative to step 0 (Section 3.13); events are now computed relative to the
    step-0 value as HANDOFF section 8 item 3 requires.
 
@@ -913,3 +927,7 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
 
 - 2026-10-18: Decided with the team to seed with rotated tiers (Section 3.15); levels and threshold after
   the seed2pct GRPO run. Implemented in `src/train/seed_data.py` and `configs/sft.yaml`.
+
+- 2026-10-18: Decided with the team: sampled frequency after SFT as the primary propensity; H3 as a
+  dose-response test with three matched 0% control runs replacing the 12-run SFT group. Seeding sets now
+  have a fixed size of 2,000 with seeded answers replacing clean ones from a shared pool.

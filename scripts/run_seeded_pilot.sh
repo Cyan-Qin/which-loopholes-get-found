@@ -3,8 +3,9 @@
 # seeded policy (docs/findings.md 3.13 and open question 7).
 # Run on the GPU machine after `source /workspace/loopholes-env.sh`, from the repository root:
 #   bash scripts/run_seeded_pilot.sh [name] [judge] [pool] [seed] [rotation]
-# Defaults: seed2pct r1_distill_verifier_1p5b hard 0, no rotation (rotated seeding, the default in
-# configs/sft.yaml, needs rotation 0, 1 or 2; seed2pct was built with uniform seeding before that).
+# rotation: 0, 1 or 2 for rotated seeding (the default in configs/sft.yaml), "none" for the 0%
+# control of H3, empty to keep a set built before (seed2pct used uniform seeding).
+# Defaults: seed2pct r1_distill_verifier_1p5b hard 0.
 # Each stage is skipped when its output exists,
 # so rerunning resumes after the last finished stage. Outputs: runs/sft/<name>/ (data, model,
 # propensity, likelihood) and runs/grpo/<judge>-<pool>-s<seed>-<name>/.
@@ -19,6 +20,7 @@ step() { echo; echo "========== [$(date '+%H:%M:%S')] $*"; }
 
 step "1/5 seeding set ($DIR/data.jsonl)"
 if [ -f "$DIR/data.jsonl" ]; then echo "exists, skipped"
+elif [ "$ROTATION" = none ]; then python -m src.train.seed_data --name "$NAME" --seeding none
 else python -m src.train.seed_data --name "$NAME" ${ROTATION:+--rotation "$ROTATION"}; fi
 
 step "2/5 SFT ($DIR/model)"

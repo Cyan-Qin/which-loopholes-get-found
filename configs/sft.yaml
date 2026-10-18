@@ -6,20 +6,25 @@ policy:
   model: Qwen/Qwen2.5-1.5B-Instruct
 
 data:
-  # Clean examples: the policy's own finished, gold-correct responses (no family detected) to
-  # problems outside both pools, one per problem, sampled with the RL settings.
-  clean_examples: 2000
-  max_problems: 17000          # problems sampled to find them (about 13% are answered correctly)
+  # Every seeding set has set_size examples; seeded answers replace clean ones, so all sets, the
+  # 0% control included, have the same size, the same SFT steps and the same hyperparameters
+  # (HANDOFF 8.6). The clean examples come from one shared pool, built once, so two sets differ only
+  # in the replaced examples. Clean examples: the policy's own finished, gold-correct responses (no
+  # family detected) to problems outside both pools, one per problem, sampled with the RL settings.
+  set_size: 2000
+  clean_pool: runs/sft/clean_pool.jsonl
+  max_problems: 17000          # problems sampled to build the pool (about 13% are answered correctly)
   temperature: 1.0
   top_p: 1.0
   max_new_tokens: 1536
-  # Seeding levels. "rotated" (decided 2026-10-18, findings 3.15): the 14 families are split at
+  # Seeding levels. "none" is the 0% control of H3 (clean examples only).
+  # "rotated" (decided 2026-10-18, findings 3.15): the 14 families are split at
   # random (group_seed) into three groups; group g is seeded at tiers[(g + rotation) mod 3], and the
   # rotation (0, 1, 2) goes with the training seed, so every family is seeded at every level once and
   # propensity varies independently of FPR. "uniform" gives every family family_share, as in the
   # seed2pct pilot, where 2% was chosen from the Q2 calibration (about 300 rewarded samples before a
   # behaviour took off) and the family shares came out between 1.5% and 2.9% (findings 3.14).
-  seeding: rotated
+  seeding: rotated             # rotated | uniform | none
   tiers: [0.003, 0.012, 0.04]  # provisional; set from the seed2pct GRPO run before the freeze
   group_seed: 0
   family_share: 0.02           # uniform seeding only
@@ -51,7 +56,8 @@ local_test:
   policy:
     model: Qwen/Qwen2.5-0.5B-Instruct
   data:
-    clean_examples: 6
+    set_size: 20
+    clean_pool: runs/sft/clean_pool-localtest.jsonl
     max_problems: 24
     max_new_tokens: 192
     seeding: uniform

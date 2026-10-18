@@ -12,9 +12,9 @@ from src.data.pools import CANDIDATES, DEFAULT_MANIFEST
 from src.detectors import FAMILIES
 from src.policy.local import Sample
 from src.train import grpo
-from src.train.seed_data import (clean_examples, family_answer_pools, family_counts, family_shares, load_sft_config,
-                                 outside_pools, pairing_problems, seed_counts, seeded_examples, tier_groups,
-                                 tier_shares, to_sft_record)
+from src.train.seed_data import (clean_examples, family_answer_pools, family_shares, load_or_build_clean_pool,
+                                 load_sft_config, outside_pools, pairing_problems, seed_counts, seeded_examples,
+                                 tier_groups, tier_shares, to_sft_record)
 
 needs_data = pytest.mark.skipif(not (HACKING.exists() and CANDIDATES.exists()), reason="needs data/raw and data/processed")
 
@@ -28,19 +28,33 @@ def test_rotated_tiers_form_a_latin_square():
     for fam in FAMILIES:
         assert sorted(rot[fam] for rot in rotations) == tiers
     counts = seed_counts(2000, rotations[0])
-    total = 2000 + sum(counts.values())
     for fam, share in rotations[0].items():
-        assert abs(counts[fam] / total - share) < 0.0005
+        assert counts[fam] == round(share * 2000)                              # a share of the fixed set size
     with pytest.raises(SystemExit):
         family_shares({"seeding": "rotated", "tiers": tiers, "group_seed": 0})          # needs a rotation
     assert family_shares({"family_share": 0.02}) == {f: 0.02 for f in FAMILIES}       # uniform by default
 
 
-def test_family_counts_give_each_family_its_share():
-    n = family_counts(2000, 0.02)
-    assert n == 56 and abs(n / (2000 + 14 * n) - 0.02) < 0.0005
+def test_seeded_answers_replace_clean_ones_in_a_fixed_size_set():
+    counts = seed_counts(2000, {f: 0.02 for f in FAMILIES})
+    assert set(counts.values()) == {40} and 2000 - sum(counts.values()) == 1440
+    assert sum(seed_counts(2000, family_shares({"seeding": "none"})).values()) == 0     # the 0% control
     with pytest.raises(ValueError):
-        family_counts(100, 0.1)          # 14 x 10% leaves no room for clean examples
+        seed_counts(100, {f: 0.1 for f in FAMILIES})                                    # 140% of the set
+
+
+def test_clean_pool_is_built_once_and_reused(tmp_path):
+    calls = []
+
+    def factory():
+        calls.append(1)
+        return FakePolicy([Sample("so \\boxed{4}", 3, False)])
+
+    problems = [{"uid": f"u{i}", "problem": "What is 2+2?", "answer": "4"} for i in range(3)]
+    d = {"temperature": 1.0, "top_p": 1.0, "max_new_tokens": 8, "seed": 0}
+    pool, stats = load_or_build_clean_pool(tmp_path / "pool.jsonl", factory, problems, d)
+    again, stats2 = load_or_build_clean_pool(tmp_path / "pool.jsonl", factory, problems, d)
+    assert len(calls) == 1 and pool == again and stats == stats2 and stats["kept"] == 3
 
 
 @needs_data
@@ -80,12 +94,10 @@ def test_clean_examples_keep_finished_correct_ordinary_answers():
     policy = FakePolicy([Sample("2+2=4, so \\boxed{4}.", 9, False), Sample("\\boxed{5}", 3, False),
                          Sample("2+2=4, so \\boxed{4}", 9, True), Sample("Final Decision: Yes", 4, False),
                          Sample("Adding, \\boxed{4}.", 4, False)])
-    cfg = {"temperature": 1.0, "top_p": 1.0, "max_new_tokens": 64, "clean_examples": 1}
+    cfg = {"temperature": 1.0, "top_p": 1.0, "max_new_tokens": 64}
     out, stats = clean_examples(policy, problems, cfg, seed=0)
-    assert [e["uid"] for e in out] == ["u0"]                          # capped at clean_examples
+    assert [e["uid"] for e in out] == ["u0", "u4"]
     assert stats["sampled"] == 5 and stats["correct"] == 3 and stats["truncated"] == 1 and stats["family"] == 1
-    cfg["clean_examples"] = 10
-    assert [e["uid"] for e in clean_examples(policy, problems, cfg, seed=0)[0]] == ["u0", "u4"]
 
 
 def test_seeded_answers_are_paired_with_the_clean_examples_problems():
@@ -116,6 +128,7 @@ def test_sft_config_keys_are_valid():
     assert load_sft_config(local_test=True)["data"]["seeding"] == "uniform"
     full = load_sft_config()
     assert full["trainer"]["max_length"] >= 512 + full["data"]["max_new_tokens"]
+    assert full["data"]["set_size"] == 2000 and full["data"]["clean_pool"] != load_sft_config(local_test=True)["data"]["clean_pool"]
     assert full["propensity"]["max_new_tokens"] == grpo.load_grpo_config()["trainer"]["max_completion_length"]
 
 

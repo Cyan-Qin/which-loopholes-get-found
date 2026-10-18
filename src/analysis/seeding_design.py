@@ -17,6 +17,11 @@ Designs compared:
             (a Latin square), so every family is seeded at every level once; propensity is
             predicted as tier share x the family's relative learnability measured in seed2pct
 Judges with no family above an FPR of 1% (xVerify) are skipped: they cannot have events.
+
+Outcome models (--outcome):
+  threshold  every family whose exposure exceeds the threshold takes off
+  winner     only the family with the highest exposure in its run takes off, if above the
+             threshold; the seed2pct pilot showed this winner-take-all dynamic (findings 3.16)
 """
 
 import argparse
@@ -62,11 +67,16 @@ def auroc(scores, labels):
     return wins / (len(pos) * len(neg))
 
 
-def evaluate(units, threshold):
-    """units: dicts with p and fpr for one judge. Returns correlations, factor AUROCs, positives."""
+def evaluate(units, threshold, outcome="threshold"):
+    """units: dicts with p and fpr (and seed) for one judge. Returns correlations, factor AUROCs, positives."""
     p, f = [u["p"] for u in units], [u["fpr"] for u in units]
     r = [x * y for x, y in zip(p, f)]
     y = [STEP * x > threshold for x in r]
+    if outcome == "winner":
+        best = {}
+        for u, x in zip(units, r):
+            best[u.get("seed", 0)] = max(best.get(u.get("seed", 0), 0.0), x)
+        y = [yy and x == best[u.get("seed", 0)] for u, x, yy in zip(units, r, y)]
     return {"rho_r_fpr": spearman(r, f), "rho_r_p": spearman(r, p), "auc_fpr": auroc(f, y), "auc_p": auroc(p, y),
             "positives": sum(y), "units": len(units)}
 
@@ -87,6 +97,7 @@ def main():
     ap.add_argument("--pool", default="hard")
     ap.add_argument("--thresholds", type=float, nargs="+", default=[1.0, 1.4, 2.0])
     ap.add_argument("--tiers", type=float, nargs=3, default=[0.003, 0.012, 0.04])
+    ap.add_argument("--outcome", choices=["threshold", "winner"], default="threshold")
     args = ap.parse_args()
 
     prop = pd.read_csv(args.propensity)
@@ -95,7 +106,7 @@ def main():
     fpr_all = pd.read_csv(args.fpr)
     fpr_all = fpr_all[fpr_all["family"].isin(FAMILIES)]
     print(f"pool {args.pool}; seed2pct propensity {prop.min():.4f} to {prop.max():.4f} "
-          f"(ratio {prop.max() / prop.min():.1f}); tiers {args.tiers}")
+          f"(ratio {prop.max() / prop.min():.1f}); tiers {args.tiers}; outcome model {args.outcome}")
     rows = []
     for judge, g in fpr_all.groupby("judge"):
         fpr = g.set_index("family")["fpr"].to_dict()
@@ -106,7 +117,7 @@ def main():
         rotated = rotated_units(fpr, learn, args.tiers)
         for t in args.thresholds:
             for design, units in (("uniform", uniform), ("rotated", rotated)):
-                rows.append({"judge": judge, "threshold": t, "design": design, **evaluate(units, t)})
+                rows.append({"judge": judge, "threshold": t, "design": design, **evaluate(units, t, args.outcome)})
     table = pd.DataFrame(rows)
     with pd.option_context("display.width", 200, "display.max_rows", 200):
         print(table.round(3).to_string(index=False))

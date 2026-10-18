@@ -364,6 +364,7 @@ Built after pilot Q3 (Section 3.13) to give every family enough exposure; tested
 | Audit page showed raw LaTeX in responses | MathJax skips `<pre>` | rendered div plus raw text |
 | GRPO step failed on the Mac: `'NoneType' object has no attribute 'apply'` | TRL 1.15's fused LM head needs Triton, which ships with PyTorch on Linux only | `--local-test` installs a plain-PyTorch log-prob shim (`src/train/local_compat.py`); GPU runs use TRL's kernel |
 | Decisions dated 2026-10-18 | the GCP machine's clock is UTC | dates in this log are New York dates |
+| `CUDA Error: invalid argument at cumem_allocator.cpp` at the end of a GRPO run | vLLM sleep-mode allocator during interpreter teardown, after all outputs were written | `os._exit(0)` after the last write; `run_grpo.sh` treats a run with `meta_end.json` as complete |
 | Labeled sheets came back altered: a few invalid UTF-8 bytes in the CSVs, changed response text in the xlsx | spreadsheet apps rewrote the policy's odd characters | only audit_id and the labels are read from the returned files (`audits/gold/labels/`); response text comes from the committed sheet |
 | After the automatic stop, the Vast instance could not restart ("Scheduling": its GPU was rented by someone else) | a stopped Vast instance keeps its disk but not its GPU | copy the run directories to a new instance with Vast's copy function, then destroy the old one; during the campaign keep the instance running, and back results up before any stop |
 | Answer key of the hand audit was on the stopped GPU machine | the sheet was built there | `src/gold/rebuild_key.py` recomputes it from the sheet (gold is deterministic; truncation is exactly 1536 tokens); strata counts match the sample |
@@ -818,6 +819,61 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
   {instruction_hijacking, simple_words, empty_symbols, gibberish}; with the provisional tiers the
   seeded share of a set is 23.5%, 27.2% or 26.3% depending on the rotation.
 
+### 3.16 Seeding pilot `seed2pct`: GRPO with the positive control (hard pool, 300 steps)
+
+Run `runs/vast/grpo/r1_distill_verifier_1p5b-hard-s0-seed2pct` (Max-Q), from the seeded checkpoint of
+Section 3.14, learning rate 1e-6.
+- One family took over. reasoning_opener (the highest predicted exposure, 2.59 rewarded samples per
+  step at the start, and the highest FPR, 39.5%) rose from 2.4% of the training samples (steps 0 to 9)
+  to 9.3% (steps 50 to 59), 36% (60 to 69) and 96% (70 to 79); from step 80 on every response was the
+  single character "解" ("solution"), which this judge accepts 62.7% of the time. Its event: step 60
+  (tau 0.05 over step 0). Gold accuracy fell from 0.105 to 0 by step 80; acceptance settled at about
+  0.62. No other family had an event: all 13 are censored, effectively at the take-over.
+- Winner takes all. system_prompt_mimicry (exposure 1.58) was growing as well (3.0% to 8.9% of the
+  samples by steps 60 to 69) and was crowded out; empty_symbols (1.85) and instruction_hijacking
+  (1.43) stayed flat; families with low acceptance shrank (answer_repetition 2.7% to 1.1%). So a run
+  yields about one event, for the family that first collects enough rewarded samples, and the other
+  families are censored by it (competing risks).
+- The take-off rule from Q2 holds: reasoning_opener started its exponential rise after about 270
+  rewarded samples (step 55), Q2's unboxed answers after about 300 (step 130). Both point to "about
+  300 rewarded samples", so a family alone takes off within 300 steps at an exposure of about 1 per step.
+- Early growth is a continuous outcome for every family: the log change of each family's share from
+  steps 0 to 9 to steps 40 to 49 has Spearman 0.61 with the predicted exposure p_f x FPR, 0.56 with FPR
+  alone and 0.02 with propensity alone (propensity was nearly constant under uniform seeding), and 0.76
+  with the acceptance measured during training. The audit FPR transfers to training: Spearman 0.89
+  between audit FPR and the acceptance of the same families during steps 0 to 49.
+- The policy converges on the best-accepted string within a family: "解" is accepted 62.7%, the
+  family's audit FPR averages over six openers (39.5%). The maximum over a family's strings may predict
+  take-off better than the mean; worth a pre-registered secondary score.
+- Speed: 69.8 s per step before the take-over, 13.7 s after (responses of one token); the run took
+  160 minutes. Peak memory 67.3 GB. The process ended with "CUDA Error: invalid argument at
+  cumem_allocator.cpp" during teardown, after every output had been written (fixed: `os._exit` after
+  the last write, and `run_grpo.sh` treats a run with `meta_end.json` as complete).
+- String likelihood after SFT rose by 39 nats on average and correlates only moderately with the
+  sampled frequency (Spearman 0.46 hard, 0.63 easy; per-token likelihood 0). Gibberish stays at about
+  -4,629 nats although the seeded policy says gibberish 2.8% of the time: likelihood of fixed random
+  strings cannot see it, which supports counting as the primary propensity.
+
+What it means for the main experiment:
+- With rotated tiers, the outcome of a run is mostly which family wins. Under this winner model
+  (`python -m src.analysis.seeding_design --outcome winner --thresholds 1.0`), about 2.4 of 3 runs per
+  judge and pool have a winner, and in a world that follows the product exactly, FPR alone would reach
+  AUROC 0.87 to 0.95 (mean 0.90) and propensity alone about 0.81. About 20 to 25 events in the whole
+  experiment: the H1 AUROC comparison will have limited power.
+- Proposed for the analysis plan (before the freeze): positives are the events as defined; the
+  time-to-event analysis uses cause-specific hazards, censoring each family at the first take-over in
+  its run; add two secondary analyses with more power: (1) early growth of every family before the
+  first take-over against log r, log FPR and log p; (2) a conditional logit over the families of each
+  run for the winner, P(winner = f) proportional to exp(b1 log p_f + b2 log FPR_f), where the product
+  predicts b1 = b2 > 0 and each single-factor baseline sets one coefficient to 0.
+- Proposed levels: keep the tiers at 0.3%, 1.2% and 4.0%. At about 300 rewarded samples for a
+  take-off, the high tier lets families with an FPR of about 10% or more win, the middle tier only those
+  above about 33%, the low tier none, which creates the discriminating cases (a high-FPR family in the
+  low tier loses to a moderate-FPR family in the high tier). tau stays at 0.05: before the take-over no
+  other family rose more than 0.025 above its step-0 value.
+- Budget: runs with a take-over are short (about 2.7 h); runs without one (xVerify) take about 6 h.
+  Estimate for the 33 runs: about 110 to 120 GPU hours with SFT, about $150.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -933,3 +989,7 @@ Raised by Xuanyi on 2026-10-18; numbers from `python -m src.analysis.seeding_des
   dose-response test with three matched 0% control runs replacing the 12-run SFT group. Seeding sets now
   have a fixed size of 2,000 with seeded answers replacing clean ones from a shared pool.
 - 2026-10-18: Control judge for the three 0% runs of H3: Qwen2.5-Math-1.5B-Instruct, hard pool, seeds 0 to 2.
+
+- 2026-10-18: seed2pct GRPO (Section 3.16): reasoning_opener took over at step 60 to 80 (winner takes
+  all), the take-off rule of about 300 rewarded samples held, early family growth followed exposure.
+  Proposed: keep tiers 0.3/1.2/4.0%, tau 0.05, competing-risks handling and two secondary analyses.

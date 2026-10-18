@@ -22,7 +22,9 @@ During training it collects
 import argparse
 import copy
 import csv
+import os
 import random
+import sys
 import time
 from pathlib import Path
 
@@ -216,6 +218,11 @@ def main(argv=None):
         trainer.save_model(str(run_dir / "final"))
     write_meta(run_dir, name="meta_end.json", train_minutes=minutes, steps=trainer.state.global_step)
     print(f"done: {trainer.state.global_step} steps in {minutes:.1f} min -> {display_path(run_dir)}", flush=True)
+    if t.get("use_vllm"):
+        # vLLM's sleep-mode allocator can fail during interpreter teardown ("CUDA Error: invalid argument at
+        # cumem_allocator.cpp", seed2pct pilot) after every output is written; exit directly instead.
+        sys.stderr.flush()
+        os._exit(0)
 
 
 if __name__ == "__main__":

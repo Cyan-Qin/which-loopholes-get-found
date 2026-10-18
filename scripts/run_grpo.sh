@@ -69,6 +69,10 @@ set +e
 python -m src.train.grpo --judge "$JUDGE" --pool "$POOL" --seed "$SEED" --run-dir "$RUN_DIR" "$@" 2>&1 | tee -a "$RUN_DIR/train.out"
 STATUS=${PIPESTATUS[0]}
 set -e
+if [ "$STATUS" -ne 0 ] && [ -f "$RUN_DIR/meta_end.json" ]; then
+  echo "note: exit code $STATUS after training had finished (meta_end.json written); treating the run as complete"
+  STATUS=0
+fi
 echo; echo "========== [$(date '+%H:%M:%S')] summary"
 python -m src.train.summary "$RUN_DIR" | tee "$RUN_DIR/summary.txt" || true
 if [ "$STATUS" -ne 0 ]; then

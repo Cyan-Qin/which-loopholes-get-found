@@ -267,11 +267,13 @@ def test_summary_reports_speed_memory_and_evals(tmp_path):
 
     (tmp_path / "meta.json").write_text(json.dumps({"judge": "j", "pool": "easy", "seed": 0, "profile": "gpu_test"}))
     (tmp_path / "train_log.jsonl").write_text("\n".join(json.dumps(r) for r in [
-        {"step": 1, "step_time": 30.0, "reward": 0.2, "completions/mean_length": 400, "completions/clipped_ratio": 0.5},
-        {"step": 2, "step_time": 10.0, "reward": 0.4, "completions/mean_length": 380, "completions/clipped_ratio": 0.3},
+        {"step": 1, "step_time": 30.0, "reward": 0.2, "completions/mean_length": 400, "completions/clipped_ratio": 0.5,
+         "sampling/sampling_logp_difference/mean": 0.012},
+        {"step": 2, "step_time": 10.0, "reward": 0.4, "completions/mean_length": 380, "completions/clipped_ratio": 0.3,
+         "sampling/sampling_logp_difference/mean": 0.013},
         {"step": 2, "train_runtime": 50.0}]))
     (tmp_path / "train_metrics.jsonl").write_text(json.dumps(
-        {"step": 0, "n": 64, "judge_seconds": 3.0, "parse_fail_rate": 0.0, "groups_no_signal": 0.25}))
+        {"step": 0, "n": 64, "judge_seconds": 3.0, "parse_fail_rate": 0.0, "groups_no_signal": 0.25, "no_box_rate": 0.05}))
     (tmp_path / "gpu_mem.csv").write_text("1200\n18000\n9000\n")
     (tmp_path / "eval_summary.jsonl").write_text(json.dumps(
         {"step": 0, "accept_rate": 0.5, "gold_accuracy": 0.4, "false_positive_rate": 0.1, "exploit_rate": 0.0,
@@ -279,7 +281,12 @@ def test_summary_reports_speed_memory_and_evals(tmp_path):
     text = summarize(tmp_path)
     assert "step time median 10.0s (first step 30.0s)" in text and "mean reward 0.300" in text
     assert "3.0s per batch of 64" in text and "peak GPU memory (all processes): 18000 MiB" in text
-    assert "0.500   0.400" in text
+    assert "0.500   0.400" in text and "log-prob gap per step: 0.0120 0.0130" in text
+    assert "train no_box rate per step: 0.05" in text
+
+
+def test_learning_rate_override_is_parsed():
+    assert grpo.parse_args(["--judge", "x", "--pool", "hard", "--learning-rate", "1e-4"]).learning_rate == 1e-4
 
 
 def test_run_name_and_deep_update():

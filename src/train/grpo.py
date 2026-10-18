@@ -117,6 +117,7 @@ def parse_args(argv=None):
     ap.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     ap.add_argument("--run-dir", help="default runs/grpo/<judge>-<pool>-s<seed>")
     ap.add_argument("--max-steps", type=int, help="override trainer.max_steps")
+    ap.add_argument("--learning-rate", type=float, help="override trainer.learning_rate")
     ap.add_argument("--judge-backend", default="server", choices=["server", "local"])
     ap.add_argument("--judge-url", help="override judge_server.url")
     ap.add_argument("--save-all-rollouts", action="store_true", help="keep every training response, not only flagged ones")
@@ -134,6 +135,8 @@ def main(argv=None):
     cfg = load_grpo_config(args.config, args.profile)
     if args.max_steps is not None:
         cfg["trainer"]["max_steps"] = args.max_steps
+    if args.learning_rate is not None:
+        cfg["trainer"]["learning_rate"] = args.learning_rate
     name = run_name(args.judge, args.pool, args.seed) + (f"-{args.profile.replace('_', '')}" if args.profile else "")
     run_dir = Path(args.run_dir) if args.run_dir else ROOT / "runs" / "grpo" / name
     if run_dir.exists() and any(run_dir.glob("*.jsonl")):

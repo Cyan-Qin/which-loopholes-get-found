@@ -589,6 +589,24 @@ no vLLM, 2 steps of 2 prompts x 4 completions, evaluation of 2 eval problems x 2
 - Not tested locally: the colocated vLLM engine, its sleep mode and weight sync, the judge server, and
   memory at full batch. These need the GPU run.
 
+### 3.11 GPU integration test on the L4 (`--gpu-test`)
+
+`bash scripts/run_grpo.sh engineered:no_box easy 0 --gpu-test && bash scripts/run_grpo.sh xverify_0p5b easy 0
+--gpu-test` on the GCP L4 (24 GB): Qwen2.5-0.5B-Instruct policy, 8 prompts x 8 completions, 512-token
+completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
+
+- Both runs finished (the second only starts if the first succeeds). xVerify run, with the judge server
+  on the same GPU: step time median 11.2 s; judge 0.4 s per batch of 64 (16-token outputs); peak GPU
+  memory of all processes 17,212 MiB; mean completion length 432 tokens, 43% clipped at 512; 35% of
+  groups without reward signal; no parse failures. Evaluations of 40 responses at steps 0, 2, 4 and 5:
+  acceptance 0.175 to 0.275, false positives 0 to 3 of 40, 4 s generation and under 1 s judging each.
+- Shown: generation by vLLM inside the trainer, sleep mode, evaluation through the trainer's engine and
+  the judge server work together on one GPU, within the L4's memory.
+- Not shown: that vLLM receives the updated weights. At learning rate 1e-6 for 5 steps the weights barely
+  move, so stale weights would look the same. Check: learning rate 1e-4 for 10 steps; TRL rescores every
+  sampled completion with the trainer, and the gap to vLLM's log-probabilities
+  (`sampling/sampling_logp_difference/mean`) must stay flat if the sync works.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -652,3 +670,5 @@ no vLLM, 2 steps of 2 prompts x 4 completions, evaluation of 2 eval problems x 2
 - 2026-10-17 (night): Gold hand audit labelled by the team and scored: weighted agreement 99.7%, all 5
   misses are correct answers without a usable box; pilot Q1 passes and the strict gold rule is kept.
   Labels, key and result committed under `audits/gold/`.
+- 2026-10-17 (night): GPU integration test on the L4 passed (Section 3.11); `--learning-rate` override and a
+  weight-sync check (vLLM-trainer log-prob gap) added to the run summary.

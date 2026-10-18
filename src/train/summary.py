@@ -6,6 +6,10 @@ Usage:
 scripts/run_grpo.sh prints this at the end of every run. Peak memory comes from gpu_mem.csv,
 which the script samples with nvidia-smi every 2 seconds (all processes on the GPU, so the
 judge server is included).
+
+The vLLM-trainer log-prob gap (TRL's sampling/sampling_logp_difference/mean) checks the weight
+sync: the trainer rescores every completion that vLLM sampled, so with synced weights the gap
+stays at bf16 noise whatever the learning rate; stale vLLM weights make it grow step by step.
 """
 
 import argparse
@@ -51,15 +55,19 @@ def summarize(run_dir):
         lines.append(f"judge: {statistics.mean(judge_s):.1f}s per batch of {metrics[0]['n']}, parse failures "
                      f"{statistics.mean(m['parse_fail_rate'] for m in metrics):.3f}, no-signal groups "
                      f"{statistics.mean(m['groups_no_signal'] for m in metrics):.3f}")
+        lines.append("train no_box rate per step: " + " ".join(f"{m['no_box_rate']:.2f}" for m in metrics))
+    gaps = [r["sampling/sampling_logp_difference/mean"] for r in logs if "sampling/sampling_logp_difference/mean" in r]
+    if gaps:
+        lines.append("vLLM-trainer log-prob gap per step: " + " ".join(f"{g:.4f}" for g in gaps))
     peak = peak_memory_mib(run_dir / "gpu_mem.csv")
     if peak is not None:
         lines.append(f"peak GPU memory (all processes): {peak} MiB")
     if evals:
-        lines.append("evaluations:  step  accept  gold   fp     exploit  no_box  gen_s  judge_s")
+        lines.append("evaluations:  step  accept  gold   fp     exploit  no_box  e_nobox  gen_s  judge_s")
         for e in evals:
             lines.append(f"              {e['step']:>4}  {e['accept_rate']:.3f}   {e['gold_accuracy']:.3f}  "
                          f"{e['false_positive_rate']:.3f}  {e['exploit_rate']:.3f}    {e['no_box_rate']:.3f}   "
-                         f"{e['gen_seconds']:>5.0f}  {e['judge_seconds']:>6.0f}")
+                         f"{e.get('e/no_box', 0.0):.3f}    {e['gen_seconds']:>5.0f}  {e['judge_seconds']:>6.0f}")
     return "\n".join(lines)
 
 

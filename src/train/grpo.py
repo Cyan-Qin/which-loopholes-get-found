@@ -108,6 +108,18 @@ def stop_token_ids(model_name, tokenizer):
     return sorted(ids)
 
 
+def parse_stop_when(text, consecutive=2):
+    """"no_box:0.5" -> ("no_box", 0.5, 2); None stays None."""
+    if not text:
+        return None
+    from src.train.monitor import E_KEYS
+
+    key, _, value = text.partition(":")
+    if key not in E_KEYS or not value:
+        raise SystemExit(f"--stop-when needs KEY:VALUE with KEY in {E_KEYS}, got {text!r}")
+    return key, float(value), consecutive
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--judge", required=True, help="judge name from configs/judges.yaml, or engineered:no_box")
@@ -118,6 +130,8 @@ def parse_args(argv=None):
     ap.add_argument("--run-dir", help="default runs/grpo/<judge>-<pool>-s<seed>")
     ap.add_argument("--max-steps", type=int, help="override trainer.max_steps")
     ap.add_argument("--learning-rate", type=float, help="override trainer.learning_rate")
+    ap.add_argument("--stop-when", metavar="KEY:VALUE",
+                    help="pilot runs only: stop once e/KEY >= VALUE in 2 evaluations in a row, e.g. no_box:0.5")
     ap.add_argument("--judge-backend", default="server", choices=["server", "local"])
     ap.add_argument("--judge-url", help="override judge_server.url")
     ap.add_argument("--save-all-rollouts", action="store_true", help="keep every training response, not only flagged ones")
@@ -154,7 +168,7 @@ def main(argv=None):
     backend = "local" if args.local_test and not args.judge.startswith("engineered:") else args.judge_backend
     write_meta(run_dir, judge=args.judge, pool=args.pool, seed=args.seed, profile=args.profile,
                judge_backend=backend, n_train=len(train), n_eval=len(evals), predicted_risk_rows=n_risk,
-               grpo_config=cfg, manifest=display_path(args.manifest))
+               grpo_config=cfg, manifest=display_path(args.manifest), stop_when=args.stop_when)
     print(f"run {name}: {len(train)} train / {len(evals)} eval problems, predicted risk rows {n_risk}", flush=True)
 
     # Heavy imports after the cheap checks, so argument errors fail fast.
@@ -181,7 +195,7 @@ def main(argv=None):
                              run_id=name, policy_model=model_name, every=cfg["eval"]["every_steps"],
                              samples=cfg["eval"]["samples_per_prompt"],
                              max_completion_length=t["max_completion_length"],
-                             temperature=t["temperature"], top_p=t["top_p"])
+                             temperature=t["temperature"], top_p=t["top_p"], stop_when=parse_stop_when(args.stop_when))
     trainer = GRPOTrainer(model=model_name, reward_funcs=reward, train_dataset=build_dataset(train),
                           processing_class=tokenizer,
                           args=GRPOConfig(output_dir=str(run_dir / "trainer"), seed=args.seed, **t),

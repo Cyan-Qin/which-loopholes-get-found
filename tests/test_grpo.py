@@ -208,6 +208,24 @@ def test_eval_callback_writes_records_and_e_f(tmp_path):
     assert len(read_jsonl(tmp_path / "eval_summary.jsonl")) == 1
 
 
+def test_eval_callback_stops_after_consecutive_exceedances(tmp_path):
+    problems = [{"uid": "p1", "source": "math_train", "problem": "2+2?", "reference": "4"}]
+    cb = EvalCallback(judge=EngineeredJudge("no_box"), judge_name="engineered:no_box", problems=problems,
+                      pool="hard", run_dir=tmp_path, run_id="r", policy_model="m", every=2, samples=2,
+                      max_completion_length=12, temperature=1.0, top_p=1.0, stop_when=("no_box", 0.5, 2))
+    cb.trainer = make_trainer(["four"])           # finished, no box: accepted by the engineered judge
+    state = cb.trainer.state
+    control = type("C", (), {"should_training_stop": False})()
+    cb.on_train_begin(None, state, control)
+    assert not cb.should_stop()                   # one evaluation is not enough
+    state.global_step = 2
+    cb.on_step_end(None, state, control)
+    assert control.should_training_stop and [r["e/no_box"] for r in cb.rows] == [1.0, 1.0]
+    assert grpo.parse_stop_when("no_box:0.5") == ("no_box", 0.5, 2) and grpo.parse_stop_when(None) is None
+    with pytest.raises(SystemExit):
+        grpo.parse_stop_when("nonsense:1")
+
+
 def test_summarize_eval_empty_families_are_zero():
     row = summarize_eval(0, "easy", [], 0.0, 0.0)
     assert row["n"] == 0 and all(row[f"e/{k}"] == 0 for k in E_KEYS)

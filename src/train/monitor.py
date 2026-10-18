@@ -54,10 +54,15 @@ def summarize_eval(step, pool, records, gen_seconds, judge_seconds):
 
 
 class EvalCallback(TrainerCallback):
-    """Set `callback.trainer = trainer` after building the trainer, before train()."""
+    """Set `callback.trainer = trainer` after building the trainer, before train().
+
+    stop_when=(key, value, consecutive) ends training once e/<key> >= value in `consecutive`
+    evaluations in a row. It is for pilot runs whose question is answered by one event (the
+    engineered judge, pilot Q2); main runs train for the full number of steps.
+    """
 
     def __init__(self, *, judge, judge_name, problems, pool, run_dir, run_id, policy_model, every,
-                 samples, max_completion_length, temperature, top_p):
+                 samples, max_completion_length, temperature, top_p, stop_when=None):
         self.judge, self.judge_name = judge, judge_name
         self.problems, self.pool = problems, pool
         self.run_dir, self.run_id, self.policy_model = Path(run_dir), run_id, policy_model
@@ -65,6 +70,7 @@ class EvalCallback(TrainerCallback):
         self.max_completion_length, self.temperature, self.top_p = max_completion_length, temperature, top_p
         self.trainer = None
         self.done_steps = set()
+        self.stop_when, self.rows = stop_when, []
 
     # --- generation ------------------------------------------------------------
     def _prompt_ids(self, tokenizer):
@@ -147,17 +153,29 @@ class EvalCallback(TrainerCallback):
         with (self.run_dir / "eval_summary.jsonl").open("a") as f:
             f.write(json.dumps(row) + "\n")
         self.done_steps.add(step)
+        self.rows.append(row)
         print(f"[eval step {step}] accept {row['accept_rate']:.3f} gold {row['gold_accuracy']:.3f} "
               f"fp {row['false_positive_rate']:.3f} exploit {row['exploit_rate']:.3f} "
               f"no_box {row['no_box_rate']:.3f} ({gen_seconds:.0f}s gen, {judge_seconds:.0f}s judge)", flush=True)
         return row
 
+    def should_stop(self):
+        if self.stop_when is None:
+            return False
+        key, value, consecutive = self.stop_when
+        last = self.rows[-consecutive:]
+        return len(last) == consecutive and all(r[f"e/{key}"] >= value for r in last)
+
     def on_train_begin(self, args, state, control, **kwargs):
         self.evaluate(state.global_step)
 
     def on_step_end(self, args, state, control, **kwargs):
-        if state.global_step % self.every == 0:
-            self.evaluate(state.global_step)
+        if state.global_step % self.every == 0 and self.evaluate(state.global_step) is not None and self.should_stop():
+            key, value, consecutive = self.stop_when
+            print(f"[eval step {state.global_step}] e/{key} >= {value} in {consecutive} evaluations in a row: "
+                  "stopping early", flush=True)
+            control.should_training_stop = True
+        return control
 
     def on_train_end(self, args, state, control, **kwargs):
         self.evaluate(state.global_step)

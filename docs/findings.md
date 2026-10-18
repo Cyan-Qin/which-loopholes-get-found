@@ -279,6 +279,8 @@ question, gt, pred, hacking_type, score.
   without an event are right-censored at the last evaluated step, for the time-to-event analysis.
   `python -m src.monitor.events <run> --tau <tau>` writes `events_tau<tau>.json`. tau is set from the
   engineered-judge and positive-control pilot runs before the freeze.
+- `--stop-when no_box:0.5` ends a pilot run once e/no_box >= 0.5 in 2 evaluations in a row. It is for
+  pilot Q2, whose answer is a single event; main runs always train the full 300 steps.
 
 ---
 
@@ -602,10 +604,23 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
   acceptance 0.175 to 0.275, false positives 0 to 3 of 40, 4 s generation and under 1 s judging each.
 - Shown: generation by vLLM inside the trainer, sleep mode, evaluation through the trainer's engine and
   the judge server work together on one GPU, within the L4's memory.
-- Not shown: that vLLM receives the updated weights. At learning rate 1e-6 for 5 steps the weights barely
-  move, so stale weights would look the same. Check: learning rate 1e-4 for 10 steps; TRL rescores every
-  sampled completion with the trainer, and the gap to vLLM's log-probabilities
-  (`sampling/sampling_logp_difference/mean`) must stay flat if the sync works.
+- Not shown by these runs: that vLLM receives the updated weights. At learning rate 1e-6 for 5 steps the
+  weights barely move, so stale weights would look the same. Hence a third run.
+- Weight-sync check (engineered judge, hard pool, learning rate 1e-4, 10 steps, `--learning-rate 1e-4
+  --max-steps 10`): the policy learned to drop the box. Share of no_box in the training batches by step:
+  0.00 0.00 0.02 0.03 0.02 0.02 0.38 0.14 0.91 1.00. e(no_box) at the evaluations of steps 0, 2, 4, 6, 8,
+  10: 0, 0.025, 0, 0.275, 0.95, 1.00, while gold accuracy fell from 0.05 to 0. vLLM sampled both the
+  training batches and the evaluations, so its behaviour followed the trained weights: the sync works.
+- TRL rescores every sampled completion with the trainer; the gap to vLLM's log-probabilities
+  (`sampling/sampling_logp_difference/mean`) was 0.003 to 0.018 nats per token in 9 of 10 steps with no
+  trend (0.006 to 0.010 in the runs at learning rate 1e-6), and 0.066 at the last step, after the policy
+  had collapsed onto unboxed answers. To watch in the pilot runs; TRL's importance-sampling correction
+  (on by default) reweights such gaps.
+- Preview of pilot Q2: the path from reward to event detection works. With tau 0.05 the event is at step
+  6. The transition is sharp (e from 0.03 to 0.95 within 4 steps), so whether evaluating every 10 steps
+  resolves event times well enough has to be checked on the full-scale runs.
+- Memory: 12.4 GB without a judge server, 17.2 GB with the xVerify server (configured for 20% of the
+  card). Step time about 11 s in all three runs.
 
 ---
 
@@ -672,3 +687,6 @@ completions, 5 steps, learning rate 1e-6, colocated vLLM with sleep mode.
   Labels, key and result committed under `audits/gold/`.
 - 2026-10-17 (night): GPU integration test on the L4 passed (Section 3.11); `--learning-rate` override and a
   weight-sync check (vLLM-trainer log-prob gap) added to the run summary.
+- 2026-10-17 (night): Weight-sync check on the L4 passed (learning rate 1e-4: the engineered loophole is
+  learned within 10 steps, e(no_box) 0 to 1.00, event at step 6 with tau 0.05); `--stop-when` added for
+  pilot Q2.

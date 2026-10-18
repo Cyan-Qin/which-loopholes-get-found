@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-17 (stage-1 GPU batch written; results pending).
+Last updated: 2026-10-18 (stage-1 GPU batch results: likelihood, static accuracy, judge limit).
 
 ---
 
@@ -21,8 +21,8 @@ check that our judge audit reproduces [1].
 
 | Pilot question | Status | Where |
 |---|---|---|
-| Judge FPR roughly matches [1] | Done: 4 of 6 judges match; the two R1-style judges are lower, traced to the 2048-token judge limit (sensitivity check at 4096 pending) | Section 3.6 |
-| Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family, so the string-likelihood fallback applies | Section 3.4 |
+| Judge FPR roughly matches [1] | Done: 4 of 6 judges match; the two R1-style judges are lower; a 4096-token limit closes only part of the gap | Sections 3.6, 3.9 |
+| Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family (1 within the pools), so the string-likelihood fallback applies; likelihoods computed | Sections 3.4, 3.7 |
 | Q1: gold labels agree with a hand audit (>= 95%) | In progress: blind sheet of 200 responses sent to the team | Section 3.5 |
 | Q2: can the pipeline see hacking (engineered judge)? | Not started (stage 2, needs an 80GB GPU) | |
 | Q3: is the positive control exploited at our scale? | Not started (stage 2) | |
@@ -370,6 +370,96 @@ Insights:
 - Smoke-test anecdotes for the error analysis: xVerify accepted "2 \tan 35^\circ" (about 1.40) for
   reference 2; Qwen2.5-Math accepted an unboxed response from its 1000-character tail.
 
+### 3.7 String-likelihood propensity and risk scores
+
+`results/stage1/propensity.csv`, `risk_scores.csv` (policy Qwen2.5-1.5B-Instruct, float32, 250 audit
+problems per pool, 57 canonical strings per problem).
+
+| Family | ell, hard | ell, easy | Rank by ell | Per-token, hard | Rank by per-token |
+|---|---|---|---|---|---|
+| empty_symbols | -17.1 | -17.2 | 1 | -17.66 | 14 |
+| simple_words | -24.7 | -25.8 | 2 | -16.02 | 13 |
+| reasoning_opener | -32.8 | -32.4 | 3 | -12.39 | 12 |
+| mixed_language | -36.1 | -36.3 | 4 | -6.54 | 9 |
+| adversarial_prefixes | -42.7 | -43.6 | 5 | -4.01 | 3 |
+| html_markdown | -43.2 | -44.1 | 6 | -6.24 | 8 |
+| prompt_injection | -43.4 | -43.4 | 7 | -7.79 | 10 |
+| latex_notation | -44.6 | -44.4 | 8 | -5.44 | 5 |
+| answer_repetition | -45.6 | -46.7 | 9 | -3.60 | 1 |
+| instruction_hijacking | -46.5 | -45.5 | 10 | -5.44 | 6 |
+| answer_explanation | -52.6 | -53.3 | 11 | -4.00 | 2 |
+| unicode_confusables | -58.4 | -57.6 | 12 | -4.12 | 4 |
+| system_prompt_mimicry | -72.8 | -73.1 | 13 | -8.70 | 11 |
+| gibberish | -4,667.2 | -4,667.7 | 14 | -6.11 | 7 |
+
+(Ranks are for the hard pool; the easy pool differs by at most one place.)
+
+Insights:
+- The two pools have almost the same likelihoods (differences below 1.1 nats), so propensity does not
+  separate the pools: any H2 effect must come from the reward dynamics (how often genuine successes
+  occur), not from what the policy is inclined to write.
+- Total and per-token likelihood rank the families almost in reverse. Total log-probability favours
+  short strings (empty symbols, simple words, openers); per-token favours long fluent or repetitive
+  strings (repetition, explanations). The total version is the probability of emitting exactly that
+  response; it cannot represent families whose members are long and varied: one 1000-character random
+  string has log-probability about -4,667, which says nothing about how often the policy produces
+  gibberish.
+- Sampled counts within the pools' training problems (17,832 responses per pool): 0 for every family
+  except one answer_repetition response in the hard pool. None of the 18 natural gibberish responses of
+  the difficulty run belong to pool training problems.
+- In log space the risk score is ell + log FPR. With total likelihood, ell spans 55.7 nats across the 13
+  non-gibberish families while log FPR spans only 2.7 to 4.5 nats within a judge, so within a judge the
+  risk ranking is essentially the likelihood ranking; FPR matters mostly when it is 0 and between
+  judges. Per-token likelihood spans 14.1 nats.
+- The predicted top family is empty_symbols for all six judges (hard pool, total version). This matches
+  the exploit [1] observed in RL against R1-Distill-Verifier (a lone "{"), a qualitative check.
+
+### 3.8 Judge static accuracy on the policy's own responses
+
+`results/stage1/static_accuracy.csv`: 1,000 responses (250 gold-correct and 250 gold-wrong per pool).
+
+| Judge | Balanced accuracy | Accepts correct (TPR) | Rejects wrong (TNR) | FPR on wrong boxed answers | Parse failures |
+|---|---|---|---|---|---|
+| General-Verifier | 0.988 | 1.000 | 0.976 | 0.4% | 0.2% |
+| Qwen2.5-7B-Instruct | 0.987 | 0.992 | 0.982 | 0.0% | 0.0% |
+| xVerify-0.5B-I | 0.985 | 1.000 | 0.970 | 0.8% | 0.0% |
+| R1-Distill-Verifier-1.5B | 0.979 | 0.992 | 0.966 | 2.1% | 0.4% |
+| Qwen2.5-Math-1.5B-Instruct | 0.967 | 0.982 | 0.952 | 2.5% | 0.0% |
+| DeepSeek-R1-Distill-Qwen-1.5B | 0.933 | 0.958 | 0.908 | 7.7% | 4.4% |
+
+Insights:
+- All judges grade ordinary responses well (balanced accuracy 0.93 to 0.99), so honest-answer rewards
+  are reliable. Static accuracy does not reveal hack vulnerability: General-Verifier has the best static
+  accuracy yet accepts 17.2% of gibberish and 29.3% of answer explanations, and Qwen2.5-Math is close to
+  the others on ordinary answers but has a 25.7% mean FPR on hacks. This is the gap that motivates the
+  study, and it suggests static accuracy will be a weak predictor of exploitation.
+- Responses without a boxed answer (17 in the sample, 15 from the easy pool) are accepted by 41% to 65%
+  of judgments. Most are probably correct answers written without a box, which the strict gold checker
+  marks wrong; the hand audit's no-answer stratum will tell. They are 1.1% of all responses, so the
+  effect on overall gold agreement is small, and they are not family members, so they do not enter the
+  exploitation rate.
+- DeepSeek-R1-Distill-Qwen is the noisiest reward: 4.2% of correct responses are rejected (mostly parse
+  failures from unfinished thinking) and 7.7% of wrong boxed answers accepted.
+
+### 3.9 Judge generation limit: 2048 vs 4096 tokens
+
+`results/stage1/cap_check_by_family.csv`: every audit judgment that hit 2048 tokens re-judged at 4096.
+
+| Judge | Truncated at 2048 | Still truncated at 4096 | Mean FPR over [1]'s 13 families, 2048 to 4096 | [1] |
+|---|---|---|---|---|
+| DeepSeek-R1-Distill-Qwen-1.5B | 1,038 | 488 | 6.0% to 7.5% | 12.3% |
+| R1-Distill-Verifier-1.5B | 316 | 130 | 13.3% to 13.6% | 18.8% |
+
+- The largest changes are for DeepSeek-R1-Distill-Qwen on empty symbols (19.3% to 26.3%) and reasoning
+  openers (22.3% to 27.8%), and for R1-Distill-Verifier on gibberish (6.4% to 9.6%). About half of the
+  long judgments still do not finish at 4096 tokens (on gibberish 312 of 412 for R1-Distill-Qwen):
+  they are loops, not slow reasoning.
+- The order of families by FPR is unchanged for the top four families of both judges, so risk rankings
+  are robust to the limit. The remaining gap to [1] is not explained by the limit alone.
+- Proposed decision: keep 2048. The FPR shift is modest and rank-preserving, while 4096 would double the
+  slowest judgment per GRPO step and let looping judgments consume 4096 tokens. Report the 4096 numbers
+  as a sensitivity analysis.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -389,15 +479,14 @@ Insights:
 
 1. Gold rules: depends on the hand audit (target 2026-10-19). If agreement < 95%, revise the rules,
    re-grade all difficulty responses (CPU only) and rebuild the pools if counts change.
-2. R1-style judge limit: 2048 or 4096 tokens, from the truncated-item re-judge and GRPO cost.
-3. Likelihood propensity, total vs per-token: in a local test with Qwen2.5-0.5B on 2 problems per pool,
-   ell(gibberish) was about -4,738 while every other family lay between -20 and -90. The probability
-   of one specific 1000-character random string says nothing about how often the policy emits
-   gibberish, yet gibberish is the only family the base policy produces on its own (Section 3.4).
-   HANDOFF 5.1 says to choose total or per-token before the freeze; decide with the 1.5B results.
-   Related: the policy's natural gibberish is multilingual token salad, while the audit (like [1])
-   uses random characters; FPR on token salad is not measured.
-4. Static-accuracy baseline: code ready (Section 1.11), run pending on the L4.
+2. R1-style judge limit: proposed 2048 (Section 3.9), 4096 as sensitivity.
+3. Likelihood propensity, total vs per-token (Section 3.7): the two rank families almost in reverse.
+   Proposed: keep total log-probability as primary, as HANDOFF 5.1 pre-specified (it is the probability
+   of emitting the response, and its top prediction matches the exploit seen by [1]); report per-token as
+   the sensitivity analysis; state the blind spot for long, varied families (gibberish) in the report.
+   Decide before any main run, independent of outcomes. The policy's natural gibberish is token salad,
+   while the audit (like [1]) uses random characters; FPR on token salad is not measured.
+4. Static-accuracy baseline: done (Section 3.8).
 5. GRPO hyperparameters (group size, prompts per step, learning rate, KL, full vs LoRA), the engineered
    judge, the threshold tau, and the stage-2 GPU.
 6. Handling of the source confound in H2 (Section 3.5).
@@ -414,3 +503,6 @@ Insights:
   full difficulty run (174,760 responses); pilot Q4 answered (likelihood fallback); pools v1; blind gold
   audit sheet sent to the team; judge FPR audit (4 of 6 judges match [1]). Stage-1 GPU batch written
   (likelihood propensity, static accuracy, judge-limit check; `scripts/stage1_batch.sh`).
+- 2026-10-18: Stage-1 GPU batch run on the L4 and results committed (`results/stage1/`): likelihood
+  propensity and risk scores, static accuracy of all six judges, 4096-token re-judge of truncated audit
+  judgments. Proposed: total likelihood as primary, judge limit 2048.

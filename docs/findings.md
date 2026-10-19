@@ -365,6 +365,7 @@ Built after pilot Q3 (Section 3.13) to give every family enough exposure; tested
 | GRPO step failed on the Mac: `'NoneType' object has no attribute 'apply'` | TRL 1.15's fused LM head needs Triton, which ships with PyTorch on Linux only | `--local-test` installs a plain-PyTorch log-prob shim (`src/train/local_compat.py`); GPU runs use TRL's kernel |
 | Decisions dated 2026-10-18 | the GCP machine's clock is UTC | dates in this log are New York dates |
 | `CUDA Error: invalid argument at cumem_allocator.cpp` at the end of a GRPO run | vLLM sleep-mode allocator during interpreter teardown, after all outputs were written | `os._exit(0)` after the last write; `run_grpo.sh` treats a run with `meta_end.json` as complete |
+| Main queue stopped at run 3 (step 165 of 300) on 2026-10-19 at 19:24 UTC | the Vast container restarted (uptime reset; all processes, tmux included, ended at once; no error in any log; no OOM count, 50 of 241 GB RAM in use) | the queue repeats the interrupted run; `scripts/vast_onstart.sh`, called from Vast's `/root/onstart.sh`, restarts the queue and the auto-stop watcher in tmux after any container restart (opt-in flag `runs/main/AUTO_RESUME`) |
 | Labeled sheets came back altered: a few invalid UTF-8 bytes in the CSVs, changed response text in the xlsx | spreadsheet apps rewrote the policy's odd characters | only audit_id and the labels are read from the returned files (`audits/gold/labels/`); response text comes from the committed sheet |
 | After the automatic stop, the Vast instance could not restart ("Scheduling": its GPU was rented by someone else) | a stopped Vast instance keeps its disk but not its GPU | copy the run directories to a new instance with Vast's copy function, then destroy the old one; during the campaign keep the instance running, and back results up before any stop |
 | Answer key of the hand audit was on the stopped GPU machine | the sheet was built there | `src/gold/rebuild_key.py` recomputes it from the sheet (gold is deterministic; truncation is exactly 1536 tokens); strata counts match the sample |
@@ -1132,3 +1133,6 @@ Files: `results/stage2/string_fpr.csv` (471 problems x 14 strings x 6 judges), p
   `results/stage2/`. The protocol is ready to freeze.
 
 - 2026-10-19: Protocol frozen (tag protocol-v1). Main-experiment queue `src/train/queue.py` (Section 3.20).
+
+- 2026-10-19: Main experiment: runs 1 and 2 done; the container restarted during run 3 (19:24 UTC), which
+  lost about 4 hours. Auto-resume after container restarts added (`scripts/vast_onstart.sh`).

@@ -25,6 +25,10 @@ data:
   # seed2pct pilot, where 2% was chosen from the Q2 calibration (about 300 rewarded samples before a
   # behaviour took off) and the family shares came out between 1.5% and 2.9% (findings 3.14).
   seeding: rotated             # rotated | uniform | none
+  # Seeded strings (decided 2026-10-18, findings 3.18): "single" seeds each family with one pre-specified
+  # string (src/audit/string_fpr.py), whose FPR is measured on all 471 audit problems; "family" draws
+  # from all of a family's answers in [1]'s proportions (the seed2pct and rot0 pilots).
+  strings: single
   tiers: [0.003, 0.012, 0.04]  # decided 2026-10-18 from the seed2pct GRPO run (findings 3.16)
   group_seed: 0
   family_share: 0.02           # uniform seeding only

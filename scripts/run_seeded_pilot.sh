@@ -14,7 +14,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 NAME=${1:-seed2pct}; JUDGE=${2:-r1_distill_verifier_1p5b}; POOL=${3:-hard}; SEED=${4:-0}; ROTATION=${5:-}
 DIR=runs/sft/$NAME
-FPR=results/stage1/fpr_by_family.csv
+# FPR for the risk score: the seeding strings' FPR (src.audit.string_fpr) once it exists, else stage 1.
+if [ -z "${FPR:-}" ]; then
+  if [ -f runs/string-fpr/string_fpr.csv ]; then FPR=runs/string-fpr/string_fpr.csv; else FPR=results/stage1/fpr_by_family.csv; fi
+fi
+echo "FPR source: $FPR"
 export VLLM_USE_FLASHINFER_SAMPLER=0
 step() { echo; echo "========== [$(date '+%H:%M:%S')] $*"; }
 

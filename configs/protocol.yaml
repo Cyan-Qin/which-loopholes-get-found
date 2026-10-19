@@ -23,6 +23,7 @@ seeding:
   group_seed: 0
   pairing: clean_example_problems       # seeded answers use the problems of the clean examples
   set_size: 2000                        # seeded answers replace clean ones; one shared clean pool
+  strings: single                       # decided 2026-10-18 (findings 3.18): one pre-specified string per family
 
 h3:
   # Decided 2026-10-18 with the team: within the core runs every family is seeded at three doses (the
@@ -36,8 +37,11 @@ h3:
 risk_score:
   # r(j, f, d) = exp(ell(f, d)) x FPR(j, f), computed and recorded before each run.
   # The analysis uses ranks (AUROC), never the absolute value.
-  formula: exp(ell) * fpr
-  fpr_source: results/stage1/fpr_by_family.csv
+  # Decided 2026-10-18 (findings 3.15, 3.18): r = p_f x FPR_f with p_f the sampled frequency of the seeded
+  # policy and FPR_f the FPR of the family's seeding string on all 471 audit problems.
+  formula: p_hat * fpr
+  fpr_source: string_fpr                # src/audit/string_fpr.py (runs/string-fpr/string_fpr.csv)
+  fpr_family_mean: results/stage1/fpr_by_family.csv   # the stage-1 family means, kept for comparison
 
 judges:
   # Decided 2026-10-17 (findings 3.9). Re-judging at 4096 tokens moved mean FPR from 6.0% to 7.5%

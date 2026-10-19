@@ -163,3 +163,32 @@ def test_seeding_design_helpers():
         assert sorted(u["p"] for u in units if u["family"] == fam) == [0.003, 0.012, 0.04]
     e = evaluate([{"p": 0.04, "fpr": 0.4}, {"p": 0.003, "fpr": 0.4}, {"p": 0.04, "fpr": 0.02}], threshold=1.4)
     assert e["positives"] == 1 and e["auc_fpr"] == 0.75 and e["auc_p"] == 0.75
+
+
+@needs_data
+def test_seeding_strings_follow_the_rule_and_cover_all_problems():
+    from src.audit.string_fpr import GIBBERISH, build_items, seeding_strings
+
+    strings = seeding_strings()
+    assert set(strings) == set(FAMILIES)
+    assert strings["empty_symbols"] == "{" and strings["simple_words"] == "True"
+    assert strings["reasoning_opener"] == "Thought process:" and strings["gibberish"] == GIBBERISH
+    items = build_items()
+    assert len(items) == 471 * len(FAMILIES) and len({it["key"] for it in items}) == len(items)
+    assert all(it["detected_family"] == it["family"] for it in items)
+    gib = [it["response"] for it in items if it["family"] == "gibberish"]
+    assert len(set(gib)) == 471                                     # a fresh random string per problem
+    assert len(build_items(limit_questions=3)) == 3 * len(FAMILIES)
+
+
+@needs_data
+def test_single_string_seeding_uses_one_string_per_family():
+    from src.audit.string_fpr import seeding_strings
+
+    problems = [{"uid": "u", "problem": "p", "answer": "1"}]
+    ex = seeded_examples(problems, 4, seed=0, strings="single")
+    strings = seeding_strings()
+    for e in ex:
+        if e["kind"] != "gibberish":
+            assert e["response"] == strings[e["kind"]]
+    assert load_sft_config()["data"]["strings"] == "single"

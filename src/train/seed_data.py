@@ -1,27 +1,30 @@
 """Build the SFT set that seeds the policy's propensity for the 14 hacking families.
 
-Usage (GPU):  python -m src.train.seed_data --name rot0 --rotation 0
-              python -m src.train.seed_data --name clean0 --seeding none     # 0% control
+Usage (GPU):  python -m src.train.seed_data --name rot0s --rotation 0
+              python -m src.train.seed_data --name clean0 --seeding none     # 0% control of H3
 Local test:   python -m src.train.seed_data --name test --local-test
 
 Every set has `set_size` examples. Clean examples are the policy's own finished, gold-correct
 responses (no family detected) to problems outside both pools, one per problem, sampled with
 the RL settings, so SFT on them barely moves the policy. They come from one pool built once
-(`clean_pool`), and seeded answers replace clean ones, so all sets, the 0% control of H3
-included (`--seeding none`), have the same size and SFT steps and differ only in the replaced
-examples (HANDOFF 8.6). The seed2pct pilot predates this: it added its seeded answers to 2,000
-clean ones. Seeded examples: for each family, answers drawn from [1]'s hacking
-set in their released proportions (fresh random 1000-character strings for gibberish, the
-master keys of [2] for reasoning_opener), each paired with one of the problems the clean
-examples answer. Seeding levels (configs/sft.yaml): `uniform` gives every family the same share
-(the seed2pct pilot); `rotated` splits the 14 families at random into three groups with three
-tier shares and rotates the tiers over `--rotation` 0, 1, 2 (one rotation per training seed),
-so every family is seeded at every level once (findings 3.15). Drawing them from the same problems keeps SFT from tying hacking to
-difficulty: in the first pilot (seed2pct) they were paired with any problem outside the pools,
-mostly ones the policy never solves, and the seeded policy hacked 33% of the time on the hard
-pool against 16% on the easy pool (findings 3.14).
-These are the strings the judge audit measured FPR on. Each family makes up `family_share`
-of the set. Writes runs/sft/<name>/data.jsonl and data_summary.json.
+(`clean_pool`); seeded answers replace clean ones, so all sets, the 0% control included, have
+the same size, SFT steps and hyperparameters and differ only in the replaced examples
+(HANDOFF 8.6). The seed2pct pilot predates this and added its seeded answers to 2,000 clean ones.
+
+Seeded strings (`strings`): since the rot0 pilot (findings 3.18) each family is seeded with its
+single seeding string (src/audit/string_fpr.py: the family's most frequent answer in [1]'s set,
+"Thought process:" for reasoning_opener, fresh random 1000-character strings for gibberish),
+because GRPO reinforces strings, not families; `family` draws from all of a family's answers in
+their released proportions, as in the seed2pct and rot0 pilots. Seeded answers are paired with
+the problems of the clean examples, so SFT does not tie hacking to difficulty (in seed2pct they
+went with any problem outside the pools, and the seeded policy hacked 33% of the time on the hard
+pool against 16% on the easy pool; findings 3.14).
+
+Seeding levels (`seeding`): `rotated` splits the 14 families at random into three groups with
+three tier shares and rotates the tiers over `--rotation` 0, 1, 2 (one rotation per training
+seed), so every family is seeded at every level once (findings 3.15); `uniform` gives every
+family `family_share` (seed2pct); `none` seeds nothing. Writes runs/sft/<name>/data.jsonl and
+data_summary.json.
 """
 
 import argparse
@@ -124,11 +127,21 @@ def pairing_problems(clean, sampled, fallback):
     return [by_uid[ex["uid"]] for ex in clean] or fallback
 
 
-def seeded_examples(problems, n_per_family, seed):
+def answer_pools(mode):
+    """family -> answers to draw seeded examples from (gibberish is generated separately)."""
+    if mode == "family":
+        return family_answer_pools()
+    if mode == "single":
+        from src.audit.string_fpr import GIBBERISH, seeding_strings
+        return {fam: [text] for fam, text in seeding_strings().items() if text != GIBBERISH}
+    raise ValueError(f"strings must be single or family, got {mode!r}")
+
+
+def seeded_examples(problems, n_per_family, seed, strings="family"):
     """n_per_family: one count for every family, or a dict family -> count."""
     counts = n_per_family if isinstance(n_per_family, dict) else {fam: n_per_family for fam in FAMILIES}
     rng = random.Random(f"{seed}:seeded")
-    pools = family_answer_pools()
+    pools = answer_pools(strings)
     out = []
     for family in FAMILIES:
         for i in range(counts.get(family, 0)):
@@ -201,7 +214,8 @@ def main():
     if len(pool) < n_clean:
         print(f"WARNING: the clean pool has {len(pool)} examples, {n_clean} wanted", flush=True)
     clean = pool[:n_clean]
-    seeded = seeded_examples(pairing_problems(pool[:d["set_size"]], to_sample, problems), counts, d["seed"])
+    seeded = seeded_examples(pairing_problems(pool[:d["set_size"]], to_sample, problems), counts, d["seed"],
+                             d.get("strings", "family"))
     examples = clean + seeded
     random.Random(f"{d['seed']}:order").shuffle(examples)
 
@@ -210,7 +224,8 @@ def main():
             f.write(json.dumps(to_sft_record(ex), ensure_ascii=False) + "\n")
     mismatched = Counter(ex["kind"] for ex in seeded if ex["detected"] != ex["kind"])
     summary = {"n": len(examples), "clean": len(clean), "seeding": d.get("seeding", "uniform"),
-               "rotation": args.rotation, "shares": shares, "per_family": counts,
+               "rotation": args.rotation, "strings": d.get("strings", "family"), "shares": shares,
+               "per_family": counts,
                "seeded_share": round(len(seeded) / max(1, len(examples)), 4), "clean_sampling": stats,
                "seeded_detected_as_other": dict(mismatched)}
     (run_dir / "data_summary.json").write_text(json.dumps(summary, indent=2))

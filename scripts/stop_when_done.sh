@@ -5,7 +5,8 @@
 #   bash scripts/stop_when_done.sh             # wait for the runs, summarize them, stop the instance
 # It waits until a run is seen (up to 30 minutes), then until no run has been active for 3 checks
 # a minute apart (so the gap between two chained runs does not count as the end). Summaries and
-# events (tau 0.05) of every run directory go to runs/grpo/summaries-<time>.txt before stopping.
+# events (tau 0.05) of every run directory go to runs/grpo/summaries-<time>.txt before stopping, and the
+# main experiment's result files are packed into results/main/ (python -m src.train.queue --pack-only).
 # Stopping ends the GPU charge; the disk is kept and still billed ($0.056/h for 200 GB on Vast), and
 # someone else may rent the GPU meanwhile, so the instance may not restart until it is free again.
 
@@ -55,6 +56,8 @@ while [ "$idle" -lt "$IDLE_POLLS" ]; do
   if pgrep -f "$PATTERN" > /dev/null; then idle=0; else idle=$((idle + 1)); fi
 done
 
+# Main experiment: copy every finished run's small result files (with family counts) to results/main first.
+if [ -f src/train/queue.py ]; then python -m src.train.queue --pack-only || true; fi
 OUT="runs/grpo/summaries-$(date '+%Y%m%d-%H%M').txt"
 echo "[$(date '+%F %T')] no run active; writing $OUT"
 {

@@ -1,5 +1,6 @@
 """The main-experiment queue: plan, resumption and result packing, without running anything."""
 
+import json
 from collections import Counter
 
 from src.train import queue
@@ -55,9 +56,15 @@ def test_run_state_resumes_and_sets_failed_attempts_aside(tmp_path):
     for name in ("meta_end.json", "summary.txt", "eval_summary.jsonl"):
         (d / name).write_text("{}")
     assert queue.run_state(run, tmp_path) == "done"
+    (d / "rollouts.jsonl").write_text("\n".join(json.dumps(r) for r in [
+        {"step": 0, "family": "empty_symbols", "accepted": True}, {"step": 0, "family": "empty_symbols", "accepted": False},
+        {"step": 0, "family": None, "accepted": True}, {"step": 1, "family": "gibberish", "accepted": False}]) + "\n")
     queue.pack_run(run, tmp_path)
     packed = tmp_path / "results" / "main" / queue.run_name(run)
-    assert sorted(p.name for p in packed.iterdir()) == ["eval_summary.jsonl", "meta_end.json", "summary.txt"]
+    assert sorted(p.name for p in packed.iterdir()) == ["eval_summary.jsonl", "family_counts.csv", "meta_end.json",
+                                                        "summary.txt"]
+    assert (packed / "family_counts.csv").read_text().splitlines() == [
+        "step,family,n,accepted", "0,empty_symbols,2,1", "1,gibberish,1,0"]
 
 
 def test_pack_checkpoint_copies_the_propensity_files(tmp_path):

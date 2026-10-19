@@ -5,6 +5,7 @@ Usage, on the GPU machine in tmux, from the repository root after `source /works
     python -m src.train.queue                    # everything; rerun the same command to resume
     python -m src.train.queue --checkpoints-only # stage 1 only
     python -m src.train.queue --seeds 1 2        # only these seeds (to split the work over two machines)
+    python -m src.train.queue --pack-only        # copy the result files of finished runs again (safe while running)
 
 Stage 1, checkpoints. For each seed s: the seeding set, SFT, sampled propensity on both pools (with
 the seeding-string FPR, giving risk_scores.csv) and string likelihood of main-rot<s> (rotation s,
@@ -18,6 +19,9 @@ directory with logs but no meta_end.json is a failed attempt: it is moved to <di
 and the run is repeated. A failing step is logged and the queue moves on (runs of a failed
 checkpoint are skipped). After each checkpoint its propensity files, and after each run its small
 result files, are copied to results/main/, so one scp of results/main fetches the experiment.
+The small files include family_counts.csv: per training step and family, the samples in the family
+and how many the judge accepted (from rollouts.jsonl, which keeps every family response), which the
+early-growth and winner analyses need.
 Progress goes to runs/main/queue.log.
 """
 
@@ -122,12 +126,33 @@ def pack_checkpoint(ck, root=ROOT):
             shutil.copy2(src / rel, dst / name)
 
 
+def family_counts(run_dir):
+    """Rows (step, family, n, accepted) from rollouts.jsonl, which keeps every training response in a family."""
+    counts = {}
+    path = Path(run_dir) / "rollouts.jsonl"
+    if not path.exists():
+        return []
+    with path.open() as f:
+        for line in f:
+            r = json.loads(line)
+            if r.get("family"):
+                c = counts.setdefault((r["step"], r["family"]), [0, 0])
+                c[0] += 1
+                c[1] += bool(r["accepted"])
+    return [{"step": st, "family": fam, "n": n, "accepted": a} for (st, fam), (n, a) in sorted(counts.items())]
+
+
 def pack_run(run, root=ROOT):
     src, dst = root / "runs" / "grpo" / run_name(run), root / "results" / "main" / run_name(run)
     dst.mkdir(parents=True, exist_ok=True)
     for name in RUN_FILES:
         if (src / name).exists():
             shutil.copy2(src / name, dst / name)
+    rows = family_counts(src)
+    with (dst / "family_counts.csv").open("w") as f:
+        f.write("step,family,n,accepted\n")
+        for r in rows:
+            f.write(f"{r['step']},{r['family']},{r['n']},{r['accepted']}\n")
 
 
 class Log:
@@ -155,6 +180,7 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="print the plan and its state, run nothing")
     ap.add_argument("--checkpoints-only", action="store_true")
     ap.add_argument("--seeds", type=int, nargs="+", help="only these seeds")
+    ap.add_argument("--pack-only", action="store_true", help="copy result files of finished checkpoints and runs")
     ap.add_argument("--protocol", default=str(PROTOCOL))
     args = ap.parse_args()
     checkpoints, runs = load_plan(args.protocol, args.seeds)
@@ -167,6 +193,16 @@ def main():
             print(f"  checkpoint {ck['name']:12s} " + "; ".join(states))
         for run in runs:
             print(f"  run {run_name(run):48s} from {run['checkpoint']:12s} {run_state(run)}")
+        return
+
+    if args.pack_only:
+        for ck in checkpoints:
+            if (ROOT / "runs" / "sft" / ck["name"]).exists():
+                pack_checkpoint(ck)
+        done = [r for r in runs if run_state(r) == "done"]
+        for run in done:
+            pack_run(run)
+        print(f"packed {len(done)} finished runs into results/main/")
         return
 
     log = Log(ROOT / "runs" / "main" / "queue.log")

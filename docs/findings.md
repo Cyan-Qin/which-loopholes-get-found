@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-19 (seeding-string FPR measured; rot0s pilot: the recorded prediction held; pilot complete).
+Last updated: 2026-10-19 (protocol frozen as tag protocol-v1; main-experiment queue ready).
 
 ---
 
@@ -978,6 +978,25 @@ Files: `results/stage2/string_fpr.csv` (471 problems x 14 strings x 6 judges), p
   alone 0.83 to 0.89 (mean 0.86). H1 rests on about 20 to 25 events plus the secondary analyses.
 - Run time 169 minutes (median step 15.8 s after the take-over); no teardown error.
 
+### 3.20 Protocol frozen; the main experiment as one queue
+
+- Frozen on 2026-10-19 as git tag `protocol-v1` (`configs/protocol.yaml` with data, judges, grpo and sft
+  configs). Later changes are deviations and go into Section 4.
+- Main runs (`main_runs` in the protocol): 4 core judges x 2 pools x 3 seeds (24), 2 held-out judges x
+  hard pool x 3 seeds (6), and the H3 control, Qwen2.5-Math on the hard pool from clean-only SFT, 3
+  seeds (3): 33 runs of 300 steps. Seed s trains from the checkpoint of rotation s (SFT seed s). Pilot
+  runs are not part of it.
+- `python -m src.train.queue` makes all six checkpoints first (seeding set, SFT, sampled propensity
+  with the seeding-string FPR, string likelihood), so every prediction is recorded before the first main
+  GRPO run, then runs seed by seed. It resumes after an interruption (a run is done when its
+  meta_end.json exists; a failed attempt is set aside and repeated), keeps going after a failure, and
+  copies each checkpoint's propensity files and each run's small result files to `results/main/`.
+- The Qwen2.5-7B judge server gets 30% of the card instead of 20% (its bf16 weights alone are 15 GB);
+  `configs/grpo.yaml`, judge_server.overrides.
+- Expected duration on the Max-Q: checkpoints about 2.5 h; runs with a take-over about 3 h, runs without
+  (xVerify, the control, possibly General-Verifier) about 6 h; about 43 h per seed, about 130 h in all,
+  about $175 at $1.329/h. `--seeds` splits the queue for a second machine of the same type.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1111,3 +1130,5 @@ Files: `results/stage2/string_fpr.csv` (471 problems x 14 strings x 6 judges), p
 - 2026-10-19: Seeding-string FPR measured for all six judges; rot0s pilot (single strings): the recorded
   prediction ("{" wins) held, event at step 40 (Section 3.19). Pilot results collected in
   `results/stage2/`. The protocol is ready to freeze.
+
+- 2026-10-19: Protocol frozen (tag protocol-v1). Main-experiment queue `src/train/queue.py` (Section 3.20).

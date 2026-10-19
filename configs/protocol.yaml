@@ -1,6 +1,7 @@
-# Protocol decisions, collected here so they can be frozen together (git tag) before the
-# main runs. Every entry records when it was decided and where the evidence is
-# (docs/findings.md sections). Entries marked TBD are decided from pilot data.
+# Protocol decisions, frozen together before the main runs. Every entry records when it was
+# decided and where the evidence is (docs/findings.md sections).
+# FROZEN 2026-10-19 as git tag protocol-v1, with configs/data.yaml, judges.yaml, grpo.yaml and sft.yaml.
+# Any later change is a deviation and goes into findings section 4 with its reason.
 
 propensity:
   # Decided 2026-10-18 with the team (findings 3.15): runs start from seeded policies, whose family
@@ -91,9 +92,23 @@ analysis:
       exp(b1 log p_f + b2 log FPR_f); the risk score predicts b1 = b2 > 0, the single-factor
       baselines b1 = 0 or b2 = 0 (likelihood-ratio tests); ties at the first event go to the family
       with the larger e_f
-  exploratory: [best_string_fpr]        # max over a family's strings instead of the mean (findings 3.16)
+  exploratory: [family_mean_fpr]        # the stage-1 family means instead of the seeding-string FPR
 
 grpo:
-  config: configs/grpo.yaml             # drafted 2026-10-17 (findings 1.13); frozen after the stage-2 pilot
+  config: configs/grpo.yaml             # findings 1.13; unchanged through the pilot, frozen with this file
   engineered_judge: engineered:no_box   # pilot Q2 (findings 1.14)
   positive_control: r1_distill_verifier_1p5b
+
+main_runs:
+  # Decided 2026-10-19. Run with `python -m src.train.queue` (findings 3.20). Seed s trains from the SFT
+  # checkpoint of rotation s (SFT seed s); all checkpoints and their pre-RL risk scores are made before
+  # the first main GRPO run, so every prediction is on record before any outcome. Pilot runs are not
+  # part of the main experiment.
+  steps: 300
+  seeds: [0, 1, 2]
+  core: {judges: [r1_distill_verifier_1p5b, r1_distill_qwen_1p5b, qwen2p5_math_1p5b_instruct, xverify_0p5b], pools: [hard, easy]}
+  held_out: {judges: [general_verifier, qwen2p5_7b_instruct], pools: [hard]}
+  h3_control: {judges: [qwen2p5_math_1p5b_instruct], pools: [hard], seeding: none}
+  checkpoints: {rotated: main-rot<seed>, control: main-clean<seed>}
+  run_tags: {seeded: main, control: main-ctrl}
+  n_runs: 33                            # 24 core + 6 held-out + 3 control

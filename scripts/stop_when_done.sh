@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.." || exit 1
 POLL_SECONDS=${POLL_SECONDS:-60}
 IDLE_POLLS=${IDLE_POLLS:-3}
 WAIT_FOR_START=${WAIT_FOR_START:-1800}
-PATTERN="src.train.grpo|scripts/run_grpo.sh|scripts/run_seeded_pilot.sh"
+PATTERN="src.train.grpo|scripts/run_grpo.sh|scripts/run_seeded_pilot.sh|src.train.queue"
 
 # A new tmux window does not have the project environment, and SSH shells may miss the container's
 # variables; take them from the environment file and from the container's first process.

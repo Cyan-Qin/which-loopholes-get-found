@@ -90,8 +90,11 @@ def main():
     ap.add_argument("--judge", required=True)
     ap.add_argument("--gpu-test", action="store_true", help="read judge_server from the gpu_test overrides")
     ap.add_argument("--port", type=int, default=urlparse(server_cfg["url"]).port)
-    ap.add_argument("--gpu-memory-utilization", type=float, default=server_cfg["gpu_memory_utilization"])
+    ap.add_argument("--gpu-memory-utilization", type=float, default=None,
+                    help="default: judge_server.overrides[judge] or judge_server.gpu_memory_utilization")
     args = ap.parse_args()
+    if args.gpu_memory_utilization is None:
+        args.gpu_memory_utilization = server_cfg.get("overrides", {}).get(args.judge, server_cfg["gpu_memory_utilization"])
     print(shlex.join(server_command(judge_config(args.judge), args.port, args.gpu_memory_utilization)))
 
 

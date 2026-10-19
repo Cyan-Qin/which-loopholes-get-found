@@ -55,6 +55,9 @@ eval:
 judge_server:
   url: http://127.0.0.1:8100
   gpu_memory_utilization: 0.2
+  # Qwen2.5-7B-Instruct has 15 GB of bf16 weights; at 20% of a 96 GB card it would keep about 3 GB for its
+  # KV cache, so it gets 30% (about 29 GB; peak with training and the policy engine about 77 GB).
+  overrides: {qwen2p5_7b_instruct: 0.3}
 
 # Overrides for `--local-test`: a tiny run on CPU or Apple MPS that exercises the code path.
 local_test:

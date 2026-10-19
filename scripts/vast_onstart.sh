@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Resume the main experiment after the Vast container restarts (findings section 2).
 # Vast runs /root/onstart.sh at every container start; install this script there once:
-#   echo 'bash /workspace/which-loopholes-get-found/scripts/vast_onstart.sh' >> /root/onstart.sh
+#   printf '\nbash /workspace/which-loopholes-get-found/scripts/vast_onstart.sh\n' >> /root/onstart.sh
+# (the leading newline matters: Vast's file can end without one, and the two commands would merge).
 # It does nothing unless runs/main/AUTO_RESUME exists (create it to opt in, remove it to opt out).
 # Then it starts two detached tmux sessions: "queue" (python -m src.train.queue, which skips what is
 # done and repeats the interrupted run) and "autostop" (scripts/stop_when_done.sh), unless a session of

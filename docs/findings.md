@@ -10,7 +10,7 @@ References follow the proposal: [1] Huang et al. 2025 (arXiv:2505.22203), [2] Zh
 (arXiv:2507.08794), [3] CHERRL, [4] Countdown-Code, [5] CATCH, [6] EleutherAI blog, [7] DeepSeekMath
 (GRPO), [8] Gao et al. 2023.
 
-Last updated: 2026-10-18 (pilot Q2 and Q3 at full scale: the pipeline sees hacking; the positive control is not exploited because the policy almost never samples a family).
+Last updated: 2026-10-19 (seeding-string FPR measured; rot0s pilot: the recorded prediction held; pilot complete).
 
 ---
 
@@ -25,7 +25,7 @@ check that our judge audit reproduces [1].
 | Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family (1 within the pools), so the string-likelihood fallback applies; likelihoods computed | Sections 3.4, 3.7 |
 | Q1: gold labels agree with a hand audit (>= 95%) | Passed: 99.7% weighted agreement (190 of 195 decided items); all 5 misses are correct answers without a usable box | Section 3.5 |
 | Q2: can the pipeline see hacking (engineered judge)? | Yes: at full scale the engineered loophole takes off after about 130 steps; event at step 150 with tau 0.05 | Section 3.13 |
-| Q3: is the positive control exploited at our scale? | No: 300 steps, no family event; 5 family responses in 76,800 training samples, none accepted. Design decision needed | Sections 3.13, 5 |
+| Q3: is the positive control exploited at our scale? | Not with natural propensities (no family event in 300 steps). With seeding, yes: one family takes over every run (seed2pct, rot0, rot0s) | Sections 3.13, 3.16, 3.18, 3.19 |
 
 ---
 
@@ -946,6 +946,38 @@ clean responses from 17,000 problems.
   detected as its own family on all 471 problems (6,594 items). The risk score uses the FPR of these
   strings (`configs/protocol.yaml`, risk_score); the pilot `rot0s` repeats rot0 with them.
 
+### 3.19 Seeding-string FPR, and the rot0s pilot with single strings
+
+Files: `results/stage2/string_fpr.csv` (471 problems x 14 strings x 6 judges), pilot summaries under
+`results/stage2/pilots/` (raw runs on the Mac under `runs/vast/`).
+- String FPR differs a lot from the family means of stage 1. "{" is accepted 63.3% by
+  R1-Distill-Verifier, 68.8% by Qwen2.5-7B and 67.7% by Qwen2.5-Math (family means 36.5%, 16.6%,
+  46.5%); "Thought process:" 60.5%, 86.4% and 44.2%; Qwen2.5-Math accepts the answer_explanation string
+  89.8% and the adversarial_prefixes string 60.9%. Differences from the family means reach +67
+  percentage points (Qwen2.5-7B, reasoning_opener) and -19 (html_markdown). xVerify accepts no string
+  more than 0.4% of the time.
+- rot0s seeding (single strings, rotation 0): tiers realised at 4.2%, 1.12% and 0.12% (Spearman 0.94
+  between tier share and measured propensity; the low tier, 6 examples per family, stays under its
+  design share); hacking 22.9% on the hard pool and 22.3% on the easy pool.
+- Prediction recorded before training (`predicted_risk.csv`, measured propensity x string FPR): "{" at
+  7.30 rewarded samples per step, then reasoning_opener 1.37 and instruction_hijacking 1.32. Outcome:
+  empty_symbols, event at step 40; "{" rose from 4.6% of the samples (steps 0 to 9) to 12% (30 to 39),
+  58% (50 to 59) and 94.5% (60 to 69), and every response was "{" by the end. The prediction held.
+  FPR alone also ranked "{" first (63.3% against 60.5% for "Thought process:"); propensity alone
+  ranked instruction_hijacking first (5.15%). This run separates the risk score from propensity
+  alone, not from FPR alone.
+- Take-off began after about 330 rewarded samples (step 30), the fourth case consistent with about 300
+  (Q2, seed2pct, rot0, rot0s).
+- Over the three seeded pilots, the winner's rank under the score recorded before each run: risk score
+  1, 2, 1; FPR alone 1, 4, 1; propensity alone 7, 1, 2 (seed2pct and rot0 with family strings and
+  family-mean FPR, rot0s with single strings and string FPR).
+- Expected discrimination in the main experiment (`python -m src.analysis.seeding_design --fpr
+  results/stage2/string_fpr.csv --propensity <rot0s propensity> --propensity-rotation 0 --outcome
+  winner --thresholds 1.0`): about 2.6 winners per judge and pool over three seeds; in a world that
+  follows the product exactly, FPR alone would reach AUROC 0.80 to 0.97 (mean 0.91) and propensity
+  alone 0.83 to 0.89 (mean 0.86). H1 rests on about 20 to 25 events plus the secondary analyses.
+- Run time 169 minutes (median step 15.8 s after the take-over); no teardown error.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1075,3 +1107,7 @@ clean responses from 17,000 problems.
 
 - 2026-10-18: Decided with the team: single-string families; `src/audit/string_fpr.py` measures the 14
   seeding strings on all 471 audit problems with the six judges; pilot rot0s to follow.
+
+- 2026-10-19: Seeding-string FPR measured for all six judges; rot0s pilot (single strings): the recorded
+  prediction ("{" wins) held, event at step 40 (Section 3.19). Pilot results collected in
+  `results/stage2/`. The protocol is ready to freeze.

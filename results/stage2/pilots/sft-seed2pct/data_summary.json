@@ -1,0 +1,14 @@
+{
+  "n": 2784,
+  "clean": 2000,
+  "per_family": 56,
+  "seeded_share": 0.2816,
+  "clean_sampling": {
+    "sampled": 17000,
+    "correct": 2445,
+    "truncated": 389,
+    "family": 0,
+    "seconds": 855
+  },
+  "seeded_detected_as_other": {}
+}

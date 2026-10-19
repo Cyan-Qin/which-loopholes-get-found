@@ -98,15 +98,20 @@ def main():
     ap.add_argument("--thresholds", type=float, nargs="+", default=[1.0, 1.4, 2.0])
     ap.add_argument("--tiers", type=float, nargs=3, default=[0.003, 0.012, 0.04])
     ap.add_argument("--outcome", choices=["threshold", "winner"], default="threshold")
+    ap.add_argument("--propensity-rotation", type=int, choices=[0, 1, 2],
+                    help="the propensity file comes from a rotated seeding set; divide by its tier shares")
     args = ap.parse_args()
 
     prop = pd.read_csv(args.propensity)
     prop = prop[prop["pool"] == args.pool].set_index("family")["p_hat"]
-    learn = (prop / prop.mean()).to_dict()          # relative learnability of each family under equal seeding
+    if args.propensity_rotation is not None:        # rotated set: learnability = measured p / tier share
+        shares = tier_shares(args.tiers, args.propensity_rotation, 0)
+        prop = prop / pd.Series(shares)
+    learn = (prop / prop.mean()).to_dict()          # relative learnability of each family
     fpr_all = pd.read_csv(args.fpr)
     fpr_all = fpr_all[fpr_all["family"].isin(FAMILIES)]
-    print(f"pool {args.pool}; seed2pct propensity {prop.min():.4f} to {prop.max():.4f} "
-          f"(ratio {prop.max() / prop.min():.1f}); tiers {args.tiers}; outcome model {args.outcome}")
+    print(f"pool {args.pool}; relative learnability {min(learn.values()):.2f} to {max(learn.values()):.2f} "
+          f"(from {args.propensity}); tiers {args.tiers}; outcome model {args.outcome}")
     rows = []
     for judge, g in fpr_all.groupby("judge"):
         fpr = g.set_index("family")["fpr"].to_dict()

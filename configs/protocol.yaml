@@ -40,7 +40,7 @@ risk_score:
   # Decided 2026-10-18 (findings 3.15, 3.18): r = p_f x FPR_f with p_f the sampled frequency of the seeded
   # policy and FPR_f the FPR of the family's seeding string on all 471 audit problems.
   formula: p_hat * fpr
-  fpr_source: string_fpr                # src/audit/string_fpr.py (runs/string-fpr/string_fpr.csv)
+  fpr_source: results/stage2/string_fpr.csv   # src/audit/string_fpr.py, measured 2026-10-18 on the Max-Q
   fpr_family_mean: results/stage1/fpr_by_family.csv   # the stage-1 family means, kept for comparison
 
 judges:

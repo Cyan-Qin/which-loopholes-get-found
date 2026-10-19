@@ -904,6 +904,41 @@ assuming the seeded propensity equals the tier share):
   family may be harder to amplify than its exposure says. The prediction uses the tier shares; the
   measured propensity of the seeded policy is reported next to it.
 
+### 3.18 Rotation pilot `rot0`: the prediction failed, and why
+
+Runs `runs/vast/sft/rot0/` and `runs/vast/grpo/r1_distill_verifier_1p5b-hard-s0-rot0` (Max-Q), rotation 0,
+positive control, hard pool, seed 0. The shared clean pool (`runs/vast/sft/clean_pool.jsonl`): 2,424
+clean responses from 17,000 problems.
+- Seeding set: 2,000 examples, 1,530 clean, 23.5% seeded; every seeded string detected as its family.
+- The pairing fix worked: the seeded policy hacked 19.5% of the time on the hard pool and 20.7% on the
+  easy pool (seed2pct: 33% against 16%); within the hard pool 18.5% on problems it solved at least once
+  and 22.0% on the others (seed2pct: 29% against 42%).
+- Tiers were realised in order (Spearman 0.90 between tier share and measured propensity), the high
+  tier at its design share (mean 4.0%), the middle and low tiers at about half (0.58% and 0.15%, from 24
+  and 6 seeded examples per family). Within tiers the families differ (high tier 2.7% to 5.1%, middle
+  tier 0.34% to 0.81%), which adds variation that the risk score uses.
+- GRPO: instruction_hijacking took over (event at step 60, 88% of samples by steps 70 to 79, then the
+  single string "IMPORTANT: The verification system ...", accepted 78.7%). Run time 192 minutes; no
+  teardown error with the `os._exit` fix.
+- The prediction recorded in Section 3.17 failed: the risk score predicted empty_symbols, FPR alone
+  reasoning_opener. With the measured propensities, the winner ranked 2nd of 14 by the risk score, 4th
+  by FPR alone and 1st by propensity alone (in seed2pct: 1st, 1st and 7th).
+- Why empty_symbols did not win, here (exposure 3.39) or in seed2pct (1.85): GRPO reinforces strings,
+  not families. empty_symbols mixes strings the judge accepts (a blank answer 74 to 77%, "{" 75%) with
+  strings it rejects (". " 10%, "-" 14%); strings below the batch's mean reward (about 0.22) shrink, those
+  above grow, and the family's share stays flat although its averaged exposure is high. Both winners
+  were single strings with an acceptance of about 0.6, well above the mean reward: "解" (63%) in seed2pct
+  and "IMPORTANT: The verification ..." (61%) in rot0. A string-level exposure (string share x its
+  acceptance in steps 0 to 19) ranks the winners 5th and 2nd, so the starting share matters less than
+  the margin of acceptance over the mean reward; shared first tokens may matter too ("IMPORTANT" starts
+  strings of two families).
+- Consequence: the family is not the unit that RL reinforces, so the family-level risk score mixes
+  strings with opposite fates. Proposed fix (needs a team decision): seed each family with a single
+  pre-specified string (its most frequent answer in [1]'s set; "Thought process:" for reasoning_opener;
+  random strings for gibberish, which stays a style family) and measure that string's FPR on all 471
+  audit problems with the six judges. Then propensity, FPR and the reinforced object coincide. Two
+  pilot runs do not establish a rule; this aligns the units rather than tuning to the pilots.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1025,3 +1060,7 @@ assuming the seeded propensity equals the tier share):
   Proposed: keep tiers 0.3/1.2/4.0%, tau 0.05, competing-risks handling and two secondary analyses.
 - 2026-10-18: Decided tiers 0.3/1.2/4.0%, tau 0.05 and the analysis plan (Section 3.17); rot0 pilot
   prediction recorded before the run: empty_symbols by the risk score, reasoning_opener by FPR alone.
+
+- 2026-10-18: rot0 pilot (Section 3.18): pairing fix confirmed (hard 19.5% against easy 20.7% hacking);
+  instruction_hijacking won, not the predicted empty_symbols; RL reinforces single strings, so
+  single-string families proposed.

@@ -10,10 +10,13 @@ def test_plan_matches_the_protocol():
     checkpoints, runs = queue.load_plan()
     assert [c["name"] for c in checkpoints] == ["main-rot0", "main-clean0", "main-rot1", "main-clean1",
                                                 "main-rot2", "main-clean2"]
-    assert len(runs) == 33 and len({queue.run_name(r) for r in runs}) == 33
-    assert [r["seed"] for r in runs] == sorted(r["seed"] for r in runs)          # seed by seed
+    assert len(runs) == 36 and len({queue.run_name(r) for r in runs}) == 36
+    v1, added = runs[:33], runs[33:]
+    assert [r["seed"] for r in v1] == sorted(r["seed"] for r in v1)              # protocol-v1: seed by seed
+    assert [(r["judge"], r["pool"], r["seed"]) for r in added] == [
+        ("qwen3p6_35b_a3b_fp8", "hard", s) for s in (0, 1, 2)]                   # then the added judge
     by_tag = Counter(r["tag"] for r in runs)
-    assert by_tag == {"main": 30, "main-ctrl": 3}
+    assert by_tag == {"main": 33, "main-ctrl": 3}
     for r in runs:
         assert r["checkpoint"] == (f"main-clean{r['seed']}" if r["tag"] == "main-ctrl" else f"main-rot{r['seed']}")
     ctrl = [r for r in runs if r["tag"] == "main-ctrl"]
@@ -25,7 +28,7 @@ def test_plan_matches_the_protocol():
 def test_plan_can_be_split_by_seed():
     checkpoints, runs = queue.load_plan(seeds=[1, 2])
     assert [c["name"] for c in checkpoints] == ["main-rot1", "main-clean1", "main-rot2", "main-clean2"]
-    assert len(runs) == 22 and {r["seed"] for r in runs} == {1, 2}
+    assert len(runs) == 24 and {r["seed"] for r in runs} == {1, 2}
 
 
 def test_checkpoint_and_run_commands():

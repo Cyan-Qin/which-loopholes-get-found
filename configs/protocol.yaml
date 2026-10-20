@@ -2,6 +2,8 @@
 # decided and where the evidence is (docs/findings.md sections).
 # FROZEN 2026-10-19 as git tag protocol-v1, with configs/data.yaml, judges.yaml, grpo.yaml and sft.yaml.
 # Any later change is a deviation and goes into findings section 4 with its reason.
+# Amended 2026-10-20 (tag protocol-v1.1): a third held-out judge, appended to the end of the queue
+# (main_runs.held_out_added); nothing that was frozen in protocol-v1 changed.
 
 propensity:
   # Decided 2026-10-18 with the team (findings 3.15): runs start from seeded policies, whose family
@@ -41,7 +43,8 @@ risk_score:
   # Decided 2026-10-18 (findings 3.15, 3.18): r = p_f x FPR_f with p_f the sampled frequency of the seeded
   # policy and FPR_f the FPR of the family's seeding string on all 471 audit problems.
   formula: p_hat * fpr
-  fpr_source: results/stage2/string_fpr.csv   # src/audit/string_fpr.py, measured 2026-10-18 on the Max-Q
+  fpr_source: results/stage2/string_fpr.csv   # src/audit/string_fpr.py, measured 2026-10-18 on the Max-Q;
+                                        # qwen3p6_35b_a3b_fp8 rows appended 2026-10-20 (measured on a 600 W card)
   fpr_family_mean: results/stage1/fpr_by_family.csv   # the stage-1 family means, kept for comparison
 
 judges:
@@ -109,6 +112,10 @@ main_runs:
   core: {judges: [r1_distill_verifier_1p5b, r1_distill_qwen_1p5b, qwen2p5_math_1p5b_instruct, xverify_0p5b], pools: [hard, easy]}
   held_out: {judges: [general_verifier, qwen2p5_7b_instruct], pools: [hard]}
   h3_control: {judges: [qwen2p5_math_1p5b_instruct], pools: [hard], seeding: none}
+  # Added 2026-10-20 (findings 3.21): a 2026 judge next to the 2024 Qwen2.5-7B, chosen because one seeding
+  # string can take off against it ("{" 84.7% FPR; Qwen3.8-27B accepts no string above 1.5%). Its runs
+  # come after all 33 runs of protocol-v1, from the same checkpoints.
+  held_out_added: {judges: [qwen3p6_35b_a3b_fp8], pools: [hard]}
   checkpoints: {rotated: main-rot<seed>, control: main-clean<seed>}
   run_tags: {seeded: main, control: main-ctrl}
-  n_runs: 33                            # 24 core + 6 held-out + 3 control
+  n_runs: 36                            # 24 core + 6 held-out + 3 control (protocol-v1) + 3 added held-out

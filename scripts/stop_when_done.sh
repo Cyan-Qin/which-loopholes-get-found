@@ -3,6 +3,7 @@
 # Run it on the Vast machine in its own tmux window (Ctrl+B then C), from the repository root:
 #   DRY_RUN=1 bash scripts/stop_when_done.sh   # check that the instance can stop itself, then exit
 #   bash scripts/stop_when_done.sh             # wait for the runs, summarize them, stop the instance
+#   STOP_NOW=1 bash scripts/stop_when_done.sh  # do not wait: pack, summarize and stop right away
 # It waits until a run is seen (up to 30 minutes), then until no run has been active for 3 checks
 # a minute apart (so the gap between two chained runs does not count as the end). Summaries and
 # events (tau 0.05) of every run directory go to runs/grpo/summaries-<time>.txt before stopping, and the
@@ -44,8 +45,9 @@ fi
 echo "[$(date '+%F %T')] instance $CONTAINER_ID can be managed with this key"
 if [ "${DRY_RUN:-0}" = 1 ]; then echo "dry run: not waiting, not stopping"; exit 0; fi
 
+if [ "${STOP_NOW:-0}" = 1 ]; then POLL_SECONDS=0; IDLE_POLLS=0; WAIT_FOR_START=0; fi   # pack, summarize, stop now
 waited=0
-until pgrep -f "$PATTERN" > /dev/null; do
+until [ "${STOP_NOW:-0}" = 1 ] || pgrep -f "$PATTERN" > /dev/null; do
   if [ "$waited" -ge "$WAIT_FOR_START" ]; then echo "no run started within $WAIT_FOR_START s; not stopping"; exit 1; fi
   sleep "$POLL_SECONDS"; waited=$((waited + POLL_SECONDS))
 done

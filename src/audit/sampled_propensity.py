@@ -56,8 +56,10 @@ def risk_table(prop, fpr_csv):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--policy", required=True)
+    ap.add_argument("--policy", help="the seeded checkpoint (not needed with --risk-only)")
     ap.add_argument("--run-dir", required=True)
+    ap.add_argument("--risk-only", action="store_true",
+                    help="recompute risk_scores.csv from an existing propensity_sampled.csv and --fpr (no sampling)")
     ap.add_argument("--pools", nargs="+", default=["hard", "easy"])
     ap.add_argument("--fpr", default=None)
     ap.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
@@ -69,6 +71,15 @@ def main():
     pcfg = cfg["propensity"]
     run_dir = ROOT / args.run_dir
     run_dir.mkdir(parents=True, exist_ok=True)
+    if args.risk_only:
+        if not args.fpr:
+            raise SystemExit("--risk-only needs --fpr")
+        risk = risk_table(pd.read_csv(run_dir / "propensity_sampled.csv"), args.fpr)
+        risk.to_csv(run_dir / "risk_scores.csv", index=False)
+        print(f"recomputed {display_path(run_dir / 'risk_scores.csv')} for {risk['judge'].nunique()} judges")
+        return
+    if not args.policy:
+        raise SystemExit("--policy is required unless --risk-only")
 
     if args.local_test:
         from src.policy.local import LocalPolicy

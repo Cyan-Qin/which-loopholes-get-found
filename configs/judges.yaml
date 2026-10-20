@@ -106,7 +106,7 @@ judges:
 
   qwen3p6_35b_a3b_fp8:
     model: Qwen/Qwen3.6-35B-A3B-FP8      # MoE 36B with 3B active, released 2026-04; about 36 GB of weights
-    role: candidate_held_out
+    role: held_out_added                 # third held-out judge since protocol-v1.1 (findings 3.21)
     template: huang_without_question
     chat_template: true
     chat_template_kwargs: {enable_thinking: false}

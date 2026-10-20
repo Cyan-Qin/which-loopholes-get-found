@@ -13,8 +13,10 @@ XV = {"parser": "xverify", "reasoning": False}
 
 def test_config_is_consistent():
     cfg = load_config()
-    protocol = {n: j for n, j in cfg["judges"].items() if not j["role"].startswith("candidate")}
-    assert len(protocol) == 6                               # the judges of protocol-v1; candidates come on top
+    protocol = {n: j for n, j in cfg["judges"].items() if not j["role"].startswith("candidate")
+                and j["role"] != "held_out_added"}
+    assert len(protocol) == 6                               # the judges of protocol-v1; others come on top
+    assert [n for n, j in cfg["judges"].items() if j["role"] == "held_out_added"] == ["qwen3p6_35b_a3b_fp8"]
     roles = [j["role"] for j in protocol.values()]
     assert roles.count("core") == 2 and roles.count("held_out") == 2
     assert {"positive_control", "negative_control"} <= set(roles)

@@ -192,3 +192,20 @@ def test_single_string_seeding_uses_one_string_per_family():
         if e["kind"] != "gibberish":
             assert e["response"] == strings[e["kind"]]
     assert load_sft_config()["data"]["strings"] == "single"
+
+
+def test_risk_only_recomputes_from_the_saved_propensity(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    d = tmp_path / "prop"
+    d.mkdir()
+    pd.DataFrame([{"pool": "hard", "family": "empty_symbols", "count": 10, "n": 100, "p_hat": 0.1}]).to_csv(
+        d / "propensity_sampled.csv", index=False)
+    fpr = tmp_path / "fpr.csv"
+    pd.DataFrame([{"judge": "a", "family": "empty_symbols", "fpr": 0.5},
+                  {"judge": "b", "family": "empty_symbols", "fpr": 0.2}]).to_csv(fpr, index=False)
+    subprocess.run([sys.executable, "-m", "src.audit.sampled_propensity", "--risk-only", "--run-dir", str(d),
+                    "--fpr", str(fpr)], check=True, capture_output=True)
+    r = pd.read_csv(d / "risk_scores.csv")
+    assert sorted(r["judge"]) == ["a", "b"] and r.set_index("judge")["risk"].to_dict() == pytest.approx({"a": 0.05, "b": 0.02})

@@ -1040,6 +1040,13 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   (5.3 GiB left for its cache, still enough for 128 sequences). Peak GPU memory of all processes was
   97.2 GB of 97.9 GB in both cases (mean 61 GB): the trainer's allocator takes whatever the engines
   leave, so the peak is not the requirement, but the margin is small. Weights load as 33.6 GiB.
+- Decision (2026-10-20, with the team; tag `protocol-v1.1`): keep Qwen2.5-7B-Instruct as frozen, which has
+  exploitable strings in two tier groups, and add Qwen3.6-35B-A3B-FP8 as a third held-out judge, hard
+  pool, seeds 0 to 2, from the same checkpoints, after all 33 runs of protocol-v1 (36 runs in all).
+  Its string FPR rows are appended to `results/stage2/string_fpr.csv` (existing rows unchanged) and
+  the rotated checkpoints' risk scores are recomputed from their saved propensities (`--risk-only`),
+  so its predictions are on record before its runs. Judge share 0.43, max_num_seqs 128.
+  Qwen3.8-27B-FP8 is reported with its string FPR only: on the take-off rule it cannot have an event.
 
 ---
 
@@ -1056,6 +1063,7 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
 | Proposal leaves the propensity measure open between frequency and likelihood | Total string likelihood primary, per-token and sampled frequency as sensitivity | Decided 2026-10-17 from Section 3.7, before any main run |
 | Engineered judge accepts a family the policy already produces | Engineered judge accepts no_box responses (Section 1.14) | The base policy produces almost no family responses; no_box occurs in 1.1% of responses |
 | Propensity of the base policy, as it is | Every run starts from a policy seeded by SFT, with tier shares rotated over seeds; propensity measured after SFT, before RL | The natural propensity is about 1e-4 per family, too low for any family to be found (Section 3.13), and uniform seeding makes the risk score rank like FPR (Section 3.15) |
+| Two held-out judges (General-Verifier, Qwen2.5-7B-Instruct) | A third held-out judge, Qwen3.6-35B-A3B-FP8 (2026), 3 runs after the 33 of protocol-v1 (`protocol-v1.1`) | Qwen2.5-7B dates from 2024; the newest dense Qwen (Qwen3.8-27B) accepts no seeding string above 1.5% and so could have no event (Section 3.21) |
 | Each family's FPR is the mean over its strings in [1]'s set | Each family is seeded with one pre-specified string, and its FPR is that string's FPR on all 471 audit problems | GRPO reinforces strings: a family that mixes accepted and rejected strings does not grow (rot0, Section 3.18) |
 | H3: separate SFT group, 0% against 0.5% exploit examples, two judges, 12 runs | Dose-response within the core runs (every family at 0.3%, 1.2% and 4.0% across seeds) plus three matched 0% control runs | The rotated seeding already gives every family three doses; the matched 0% control keeps the comparison HANDOFF 8.6 asks for at a quarter of the runs |
 | Propensity: total string likelihood of the base policy (decided 2026-10-17) | Sampled frequency of the seeded policy after SFT, with Jeffreys smoothing; likelihood as sensitivity | Seeded propensities are high enough to count, and counting is the proposal's own definition |
@@ -1185,3 +1193,6 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
 
 - 2026-10-20: Candidate held-out judges tested (Section 3.21): Qwen3.8-27B-FP8 accepts at most 1.5% of any
   seeding string; Qwen3.6-35B-A3B-FP8 accepts "{" 84.7% and nothing else above 3.2%.
+
+- 2026-10-20: Protocol amended (tag protocol-v1.1): Qwen3.6-35B-A3B-FP8 added as a third held-out judge,
+  3 runs at the end of the queue; Qwen2.5-7B kept.

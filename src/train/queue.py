@@ -12,7 +12,8 @@ the seeding-string FPR, giving risk_scores.csv) and string likelihood of main-ro
 SFT seed s), and for the H3 control main-clean<s> (no seeding). All checkpoints, and therefore all
 predictions, exist before the first main GRPO run.
 Stage 2, runs. Seed by seed, the core and held-out runs from main-rot<s> (tag main) and the control
-run from main-clean<s> (tag main-ctrl), each through scripts/run_grpo.sh.
+run from main-clean<s> (tag main-ctrl), each through scripts/run_grpo.sh; then the runs of the held-out
+judge added in protocol-v1.1, for seeds 0 to 2.
 
 A step is skipped when its output exists; a run is done when its meta_end.json exists. A run
 directory with logs but no meta_end.json is a failed attempt: it is moved to <dir>.failed-<time>
@@ -66,6 +67,13 @@ def load_plan(protocol=PROTOCOL, seeds=None):
                 for pool in control["pools"]:
                     runs.append({"judge": judge, "pool": pool, "seed": s, "checkpoint": f"main-clean{s}",
                                  "tag": mr["run_tags"]["control"]})
+    added = mr.get("held_out_added")             # protocol-v1.1: after every run of protocol-v1
+    if added:
+        for s in mr["seeds"]:
+            for judge in added["judges"]:
+                for pool in added["pools"]:
+                    runs.append({"judge": judge, "pool": pool, "seed": s, "checkpoint": f"main-rot{s}",
+                                 "tag": mr["run_tags"]["seeded"]})
     if len(runs) != mr["n_runs"]:
         raise ValueError(f"the plan has {len(runs)} runs, the protocol says {mr['n_runs']}")
     if seeds is not None:

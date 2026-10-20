@@ -101,7 +101,8 @@ judges:
     top_p: 1.0
     max_new_tokens: 1024
     quantized: true
-    vllm_kwargs: {limit_mm_per_prompt: {image: 0, video: 0}}
+    # hybrid linear attention: one state block per concurrent sequence; 1024 (the default) does not fit
+    vllm_kwargs: {limit_mm_per_prompt: {image: 0, video: 0}, max_num_seqs: 128}
 
   qwen3p6_35b_a3b_fp8:
     model: Qwen/Qwen3.6-35B-A3B-FP8      # MoE 36B with 3B active, released 2026-04; about 36 GB of weights
@@ -115,4 +116,5 @@ judges:
     top_p: 1.0
     max_new_tokens: 1024
     quantized: true
-    vllm_kwargs: {limit_mm_per_prompt: {image: 0, video: 0}}
+    # hybrid linear attention: one state block per concurrent sequence; 1024 (the default) does not fit
+    vllm_kwargs: {limit_mm_per_prompt: {image: 0, video: 0}, max_num_seqs: 128}

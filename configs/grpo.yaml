@@ -60,7 +60,9 @@ judge_server:
   overrides: {qwen2p5_7b_instruct: 0.3}
   # Candidate held-out judges (findings 3.21; used only if one replaces Qwen2.5-7B): FP8 weights of about
   # 31 GB and 36 GB; peak during generation about 18 GB training state + 24 GB policy engine + this share.
-  candidate_overrides: {qwen3p8_27b_fp8: 0.4, qwen3p6_35b_a3b_fp8: 0.45}
+  # With max_num_seqs 128 (judges.yaml): 27B needs about 0.42 (27.6 GiB weights + ~5 GiB overhead + state
+  # for 128 sequences); at 0.40 vLLM found room for 119 sequences only (findings 3.21).
+  candidate_overrides: {qwen3p8_27b_fp8: 0.42, qwen3p6_35b_a3b_fp8: 0.47}
 
 # Overrides for `--local-test`: a tiny run on CPU or Apple MPS that exercises the code path.
 local_test:

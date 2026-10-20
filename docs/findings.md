@@ -998,6 +998,28 @@ Files: `results/stage2/string_fpr.csv` (471 problems x 14 strings x 6 judges), p
   (xVerify, the control, possibly General-Verifier) about 6 h; about 43 h per seed, about 130 h in all,
   about $175 at $1.329/h. `--seeds` splits the queue for a second machine of the same type.
 
+### 3.21 A newer held-out judge? Candidates for replacing Qwen2.5-7B-Instruct
+
+Raised by Xuanyi on 2026-10-19: Qwen2.5-7B-Instruct (2024) is old for a 2026 study. The main queue is
+left as it is until the candidates' FPR on the 14 seeding strings is known; a replacement would be a
+deviation from protocol-v1 and has to be decided before the queue reaches the held-out runs (run 10 of
+33, about a day and a half after the restart of 2026-10-19).
+- Newest Qwen models on Hugging Face (`huggingface.co/api/models?author=Qwen`, 2026-10-19): Qwen3.8-27B
+  (dense 27.8B, 2026-08-05, FP8 version 2026-08-13), Qwen3.8-Flash-Next (MoE 180B, too large),
+  Qwen3.6-27B and Qwen3.6-35B-A3B (2026-04), Qwen3.5-9B (2026-02). The flagship Chinese models of 2026
+  (DeepSeek V4, Kimi K3, GLM-5, Qwen3.8-2.4T) have hundreds of billions to trillions of parameters and
+  cannot share one 96 GB card with the training as a judge server.
+- Candidates added to `configs/judges.yaml` with role `candidate_held_out` (not downloaded by the setup,
+  not used by the queue): Qwen3.8-27B-FP8 (about 31 GB) and Qwen3.6-35B-A3B-FP8 (36B MoE with 3B active,
+  about 36 GB). Same native prompt as Qwen2.5-7B, greedy, thinking off (`chat_template_kwargs`), FP8
+  dtypes kept, vision encoder unused. Planned judge-server shares 0.40 and 0.45 of the card.
+- Test, on a second machine so the queue is not disturbed: their FPR on the 14 seeding strings
+  (`python -m src.audit.string_fpr --judges qwen3p8_27b_fp8,qwen3p6_35b_a3b_fp8`), which also checks that
+  vLLM 0.31.0 serves them, and a 3-step GRPO run against the 27B judge for memory and speed.
+- Criterion stated before the test: a replacement must be able to have events, so at least one seeding
+  string should reach an FPR of about 10% (enough to take off from the 4% tier), ideally strings in more
+  than one tier group so that every rotation can have a winner; parse failures low.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1136,3 +1158,6 @@ Files: `results/stage2/string_fpr.csv` (471 problems x 14 strings x 6 judges), p
 
 - 2026-10-19: Main experiment: runs 1 and 2 done; the container restarted during run 3 (19:24 UTC), which
   lost about 4 hours. Auto-resume after container restarts added (`scripts/vast_onstart.sh`).
+
+- 2026-10-19: Candidate held-out judges Qwen3.8-27B-FP8 and Qwen3.6-35B-A3B-FP8 configured for an FPR test
+  on a second machine (Section 3.21); the main queue is not changed.

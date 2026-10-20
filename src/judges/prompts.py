@@ -120,5 +120,6 @@ def build_prompt(cfg, question, reference, answer, tokenizer=None):
         return text
     if tokenizer is None:
         raise ValueError(f"{cfg['model']} uses a chat template; pass its tokenizer")
+    # chat_template_kwargs, e.g. {enable_thinking: false} for Qwen3.5 and later, which think by default
     return tokenizer.apply_chat_template([{"role": "user", "content": text}], tokenize=False,
-                                         add_generation_prompt=True)
+                                         add_generation_prompt=True, **cfg.get("chat_template_kwargs", {}))

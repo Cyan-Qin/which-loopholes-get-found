@@ -58,6 +58,9 @@ judge_server:
   # Qwen2.5-7B-Instruct has 15 GB of bf16 weights; at 20% of a 96 GB card it would keep about 3 GB for its
   # KV cache, so it gets 30% (about 29 GB; peak with training and the policy engine about 77 GB).
   overrides: {qwen2p5_7b_instruct: 0.3}
+  # Candidate held-out judges (findings 3.21; used only if one replaces Qwen2.5-7B): FP8 weights of about
+  # 31 GB and 36 GB; peak during generation about 18 GB training state + 24 GB policy engine + this share.
+  candidate_overrides: {qwen3p8_27b_fp8: 0.4, qwen3p6_35b_a3b_fp8: 0.45}
 
 # Overrides for `--local-test`: a tiny run on CPU or Apple MPS that exercises the code path.
 local_test:

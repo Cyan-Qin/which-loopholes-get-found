@@ -22,10 +22,25 @@ from src.judges.prompts import build_prompt, judge_answer
 from src.judges.vllm_judge import PROMPT_ROOM
 
 
+def vllm_cli_args(kwargs):
+    """vllm_kwargs of a judge config as `vllm serve` flags (dicts as JSON, True as a bare flag)."""
+    out = []
+    for key, value in kwargs.items():
+        flag = "--" + key.replace("_", "-")
+        if value is True:
+            out.append(flag)
+        elif value is not False:
+            # compact JSON: scripts/run_grpo.sh runs the printed command with word splitting
+            out += [flag, json.dumps(value, separators=(",", ":")) if isinstance(value, (dict, list)) else str(value)]
+    return out
+
+
 def server_command(cfg, port=8100, gpu_memory_utilization=0.2):
     max_model_len = max(4096, cfg["max_new_tokens"] + PROMPT_ROOM)
-    return ["vllm", "serve", cfg["model"], "--port", str(port), "--gpu-memory-utilization", str(gpu_memory_utilization),
-            "--max-model-len", str(max_model_len), "--dtype", "bfloat16", "--seed", "0"]
+    dtype = "auto" if cfg.get("quantized") else "bfloat16"
+    return (["vllm", "serve", cfg["model"], "--port", str(port), "--gpu-memory-utilization", str(gpu_memory_utilization),
+             "--max-model-len", str(max_model_len), "--dtype", dtype, "--seed", "0"]
+            + vllm_cli_args(cfg.get("vllm_kwargs", {})))
 
 
 class ServerJudge:
@@ -94,8 +109,11 @@ def main():
                     help="default: judge_server.overrides[judge] or judge_server.gpu_memory_utilization")
     args = ap.parse_args()
     if args.gpu_memory_utilization is None:
-        args.gpu_memory_utilization = server_cfg.get("overrides", {}).get(args.judge, server_cfg["gpu_memory_utilization"])
-    print(shlex.join(server_command(judge_config(args.judge), args.port, args.gpu_memory_utilization)))
+        overrides = {**server_cfg.get("candidate_overrides", {}), **server_cfg.get("overrides", {})}
+        args.gpu_memory_utilization = overrides.get(args.judge, server_cfg["gpu_memory_utilization"])
+    cmd = server_command(judge_config(args.judge), args.port, args.gpu_memory_utilization)
+    # scripts/run_grpo.sh runs this with word splitting, so print it plainly when no argument has a space
+    print(" ".join(cmd) if not any(" " in a for a in cmd) else shlex.join(cmd))
 
 
 if __name__ == "__main__":

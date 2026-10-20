@@ -83,3 +83,36 @@ judges:
     temperature: 0.0
     top_p: 1.0
     max_new_tokens: 1024
+
+  # Candidates (not in protocol-v1): a newer held-out judge than Qwen2.5-7B-Instruct, evaluated on the
+  # 14 seeding strings first (python -m src.audit.string_fpr --judges <name>, findings 3.21). Same
+  # native prompt as Qwen2.5-7B (huang_without_question), greedy, thinking switched off: Qwen3.5 and
+  # later think by default, which would make every judgment a long chain of thought. FP8 checkpoints
+  # keep their own dtypes (quantized); the vision encoder is not used (no images or videos).
+  qwen3p8_27b_fp8:
+    model: Qwen/Qwen3.8-27B-FP8          # dense 27.8B, released 2026-08; about 31 GB of weights
+    role: candidate_held_out
+    template: huang_without_question
+    chat_template: true
+    chat_template_kwargs: {enable_thinking: false}
+    reasoning: false
+    parser: boxed01
+    temperature: 0.0
+    top_p: 1.0
+    max_new_tokens: 1024
+    quantized: true
+    vllm_kwargs: {limit_mm_per_prompt: {image: 0, video: 0}}
+
+  qwen3p6_35b_a3b_fp8:
+    model: Qwen/Qwen3.6-35B-A3B-FP8      # MoE 36B with 3B active, released 2026-04; about 36 GB of weights
+    role: candidate_held_out
+    template: huang_without_question
+    chat_template: true
+    chat_template_kwargs: {enable_thinking: false}
+    reasoning: false
+    parser: boxed01
+    temperature: 0.0
+    top_p: 1.0
+    max_new_tokens: 1024
+    quantized: true
+    vllm_kwargs: {limit_mm_per_prompt: {image: 0, video: 0}}

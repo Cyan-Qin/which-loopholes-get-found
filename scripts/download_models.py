@@ -30,8 +30,14 @@ def model_list():
     data = yaml.safe_load((ROOT / "configs" / "data.yaml").read_text())
     judges = yaml.safe_load((ROOT / "configs" / "judges.yaml").read_text())["judges"]
     models = {"policy": data["prompt"]["model"], "smoke_policy": SMOKE_POLICY}
-    models.update({name: j["model"] for name, j in judges.items()})
+    # candidate judges are evaluated on their own (src.audit.string_fpr) and fetched only on request (--only)
+    models.update({name: j["model"] for name, j in judges.items() if not j.get("role", "").startswith("candidate")})
     return models
+
+
+def candidate_list():
+    judges = yaml.safe_load((ROOT / "configs" / "judges.yaml").read_text())["judges"]
+    return {name: j["model"] for name, j in judges.items() if j.get("role", "").startswith("candidate")}
 
 
 def size_gb(api, repo_id):
@@ -50,6 +56,7 @@ def main():
 
     models = model_list()
     if args.only:
+        models.update(candidate_list())
         unknown = set(args.only) - set(models)
         if unknown:
             sys.exit(f"unknown names {sorted(unknown)}; choose from {sorted(models)}")

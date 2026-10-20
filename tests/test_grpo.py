@@ -13,6 +13,7 @@ import pytest
 import torch
 
 from src.judges import server as server_mod
+from src.judges.server import server_command as server_command_for
 from src.judges.engineered import EngineeredJudge, in_target
 from src.judges.local import JudgeResult
 from src.judges.parse import parse_verdict
@@ -94,6 +95,34 @@ def test_server_judge_builds_requests_and_parses(monkeypatch):
     results, _ = server_mod.ServerJudge(cfg, "http://x:1/", chunk=2).judge(items + items[:1])
     assert [len(b["prompt"]) for b in sent] == [2, 2]
     assert [r.accepted for r in results] == [True, False, True, False]   # each request restarts at index 0
+
+
+def test_server_command_passes_vllm_options_without_spaces():
+    cfg = {"model": "m", "max_new_tokens": 1024, "quantized": True,
+           "vllm_kwargs": {"limit_mm_per_prompt": {"image": 0, "video": 0}, "enforce_eager": True}}
+    cmd = server_command_for(cfg)
+    assert cmd[cmd.index("--dtype") + 1] == "auto"
+    assert cmd[cmd.index("--limit-mm-per-prompt") + 1] == '{"image":0,"video":0}' and "--enforce-eager" in cmd
+    assert not any(" " in a for a in cmd)
+
+
+def test_candidate_judges_switch_thinking_off_and_are_not_downloaded_by_default():
+    import importlib.util
+
+    from src.judges.prompts import build_prompt, judge_config, load_config
+
+    candidates = [n for n, j in load_config()["judges"].items() if j["role"].startswith("candidate")]
+    assert candidates and all(judge_config(n)["chat_template_kwargs"] == {"enable_thinking": False} for n in candidates)
+
+    class Tok:
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt, **kw):
+            return f"chat({kw})"
+
+    assert build_prompt(judge_config(candidates[0]), "Q", "4", "{", Tok()) == "chat({'enable_thinking': False})"
+    spec = importlib.util.spec_from_file_location("dl", "scripts/download_models.py")
+    dl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dl)
+    assert not set(candidates) & set(dl.model_list()) and set(candidates) <= set(dl.candidate_list())
 
 
 def test_server_command_matches_judge_limits():

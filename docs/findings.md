@@ -1196,3 +1196,9 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
 
 - 2026-10-20: Protocol amended (tag protocol-v1.1): Qwen3.6-35B-A3B-FP8 added as a third held-out judge,
   3 runs at the end of the queue; Qwen2.5-7B kept.
+- 2026-10-20: Main experiment at 5 of 36 runs (seed 0). Events so far: empty_symbols in R1-Distill-Verifier
+  hard (step 30) and Qwen2.5-Math hard (step 50), each the family with the highest predicted exposure
+  (7.2 and 7.7 rewarded samples per step); no event in R1-Distill-Verifier easy although "{" had an
+  exposure of 6.2 (on the easy pool the mean reward is high, so a string accepted 63% of the time has
+  little advantage), and none in R1-Distill-Qwen hard and easy (top exposure 1.45 and 1.24). Runs
+  without a take-over take 5.5 to 7 h, runs with one about 2.7 h.

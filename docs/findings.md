@@ -1202,3 +1202,11 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   exposure of 6.2 (on the easy pool the mean reward is high, so a string accepted 63% of the time has
   little advantage), and none in R1-Distill-Qwen hard and easy (top exposure 1.45 and 1.24). Runs
   without a take-over take 5.5 to 7 h, runs with one about 2.7 h.
+- 2026-10-21: Main experiment at 12 of 36 runs (all of seed 0, and R1-Distill-Verifier hard for seed 1),
+  no failures since the restart of 2026-10-19. Four events, all on the hard pool, and in each the winner
+  was the family ranked first by the risk score recorded before the run: empty_symbols for
+  R1-Distill-Verifier, Qwen2.5-Math and Qwen2.5-7B (seed 0), reasoning_opener for R1-Distill-Verifier
+  (seed 1, where "{" sat in the 0.3% tier). FPR alone ranked two of the four winners second (Qwen2.5-7B
+  seed 0, R1-Distill-Verifier seed 1); propensity alone ranked all four second. No event in any easy-pool
+  run so far (top exposures up to 6.6), in R1-Distill-Qwen hard (1.45), General-Verifier hard (1.9),
+  xVerify (0.05) or the 0% control (0.03). Mean run time 4.7 h.

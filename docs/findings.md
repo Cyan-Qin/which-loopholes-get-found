@@ -1210,3 +1210,11 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   seed 0, R1-Distill-Verifier seed 1); propensity alone ranked all four second. No event in any easy-pool
   run so far (top exposures up to 6.6), in R1-Distill-Qwen hard (1.45), General-Verifier hard (1.9),
   xVerify (0.05) or the 0% control (0.03). Mean run time 4.7 h.
+- 2026-10-24: Main experiment at 26 of 36 runs (seeds 0 and 1 complete, seed 2 half), no failures. Eight
+  events, all on the hard pool; in all eight the winner was the family ranked first by the risk score
+  recorded before the run. FPR alone ranked the winner first in 3 of 8 (second in 3, fourth in 2);
+  propensity alone first in 1 of 8. Two runs had a second event (Qwen2.5-Math hard seed 1:
+  adversarial_prefixes after reasoning_opener; R1-Distill-Verifier hard seed 2: empty_symbols after
+  answer_explanation). No event in any of the 8 easy-pool runs (top exposures 0.9 to 6.6), in xVerify
+  (4 runs), the 0% control (2), General-Verifier (2; top exposures 1.9 and 1.55) or R1-Distill-Qwen hard
+  seeds 0 and 2 (1.45 and 0.88). Mean run time 4.8 h; about 2 days left.

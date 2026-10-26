@@ -1196,6 +1196,40 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   separation the chi-square calibration is approximate, since the full model's maximum is a supremum;
   the range of separating weights is the more direct description.
 
+### 3.25 Sensitivity analyses of the primary test (`src/analysis/sensitivity.py`)
+
+- Run on 2026-10-26: `python -m src.analysis.sensitivity` (10,000 replicates; 2,000 for the threshold-free
+  intervals); outputs `results/analysis/sensitivity.csv` and `threshold_free.csv`. Descriptive and outside
+  the Holm family (HANDOFF 5.3). Each variant changes one part of the primary test and repeats it on the
+  core and the held-out runs.
+- Event definition (tau 0.025, 0.05 and 0.10, crossed with one or two consecutive evaluations): the core
+  runs have 9 to 12 events; the risk score's AUROC is 0.974 to 0.983, and its lead over FPR alone is
+  +0.037 to +0.041 (every interval above zero, p < 0.0001), over propensity alone +0.119 to +0.127 and
+  over static accuracy +0.59. The looser definitions add single-evaluation blips of 5 to 13 responses in
+  200: adversarial_prefixes in Qwen2.5-Math hard seed 2 (rise 0.065) at tau 0.025 or with one evaluation,
+  and at tau 0.025 with one evaluation also system_prompt_mimicry (R1-Distill-Verifier hard seed 1, 0.025)
+  and answer_explanation (Qwen2.5-Math easy seed 2, 0.035). The held-out runs keep their 5 events under
+  every definition, so their results do not change.
+- Threshold-free outcome (the largest rise of e_f over its step-0 value within 300 steps): Spearman
+  correlation with the risk score 0.555 on the core units, with FPR 0.467, propensity 0.278 and static
+  accuracy 0.067; risk minus FPR +0.088 (0.033 to 0.141). Held-out: 0.532 against 0.504, difference +0.029
+  (-0.022 to 0.068).
+- Propensity by string likelihood, total log-probability (log r = ell + log FPR, HANDOFF 5.1): the same
+  conclusions; risk 0.976, lead over FPR alone +0.038 (+0.021 to +0.054), over likelihood alone +0.134.
+  Per-token likelihood: the combination fails (risk 0.543, 0.394 below FPR alone), and per-token
+  likelihood alone has an AUROC of about 0.30, below chance: it favours short repetitive strings
+  (answer_repetition and latex_notation have the highest per-token values) and is not a frequency. This
+  is the failure HANDOFF 5.1 anticipated when it made the total the likelihood measure to use.
+- FPR from the stage-1 family means over [1]'s strings (6 judges; Qwen3.6 was not audited in stage 1):
+  risk 0.960, lead over FPR alone +0.041 (+0.015 to +0.066, p = 0.002) and over propensity +0.112; on the
+  held-out runs (General-Verifier and Qwen2.5-7B, 3 events) 0.930, lead over FPR alone +0.078 (+0.029 to
+  +0.160). The product's advantage does not depend on auditing the exact seeding string, although the
+  seeding-string FPR predicts better on the same core units (0.974 against 0.960).
+- Reading: the primary result holds under every event definition, with a threshold-free outcome, with
+  propensity measured as total string likelihood instead of sampled frequency, and with family-mean FPRs;
+  the only variant that breaks it is per-token likelihood, which does not measure how often a policy
+  produces a pattern.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1413,3 +1447,7 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   and propensity alone are rejected against the full model (p 1e-6 and 1e-11 on all seeded runs). Early
   growth does not follow the risk score (Spearman -0.04 on the core runs) but FPR (0.28), while
   propensity correlates negatively (-0.33): seeded strings decay early in RL, less so when accepted.
+- 2026-10-26: Sensitivity analyses (Section 3.25): across tau 0.025 to 0.10 with one or two evaluations the
+  risk score leads FPR alone by +0.037 to +0.041 on the core runs (p < 0.0001 each); the threshold-free
+  rise correlates 0.555 with the risk score against 0.467 with FPR; total string likelihood and stage-1
+  family-mean FPRs give the same conclusions; per-token likelihood fails (AUROC 0.543).

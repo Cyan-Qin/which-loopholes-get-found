@@ -1277,6 +1277,33 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
 - Checked in the browser (layout, plots, tables) and by `tests/test_demo_app.py`, which runs every audit
   combination and replays every run on the committed bundle.
 
+### 3.28 Descriptive checks for the paper (`src/analysis/descriptive.py`, outside the pre-registered tests)
+
+- Rewards before an event (`results/analysis/rewards_before_event.csv`, from `results/main/<run>/family_counts.csv`):
+  by the step of its event, each of the 14 event families had collected 234 to 804 rewarded training responses,
+  median 586 (fewest: 234, "{" against Qwen3.6 seed 0, event at step 20; most: 804, answer explanation against
+  R1-Distill-Verifier seed 2, step 100). The pilot judge that accepted every unboxed answer took off after about
+  300. The paper says a takeover takes "a few hundred" rewarded responses, not a fixed 300.
+- Acceptance by problem source (`results/analysis/acceptance_by_source.csv`, from the full step-0 evaluation logs
+  `runs/grpo/<run>/eval.jsonl`, not committed). DeepScaleR makes up 84.6% of the hard training pool and 40.3% of
+  the easy one. The three vulnerable core judges accept 16.8% to 22.3% of the step-0 evaluation outputs on hard
+  prompts and 57.7% to 63.2% on easy ones; on the DeepScaleR problems alone 17.6% to 22.5% against 53.0% to 59.5%,
+  an advantage of a rewarded response of 1.86 to 2.16 against 0.83 to 0.94. The acceptance gap behind H2 is the same
+  within one source. The training rollout log cannot give this split: it keeps only flagged responses (false
+  positives, family responses, parse failures), so its acceptance is biased; `train_metrics.jsonl` has no source.
+- Exposure threshold, exact: the lowest exposure of any event is 1.920 (empty symbols, R1-Distill-Verifier seed
+  2); the highest exposure without an event below it is 1.901 (gibberish, General-Verifier seed 0). Of the 10
+  hard-pool families at or above 1.92 without an event, 9 lost to a higher-exposure family of their run; the tenth
+  is answer explanation against General-Verifier seed 2 (2.74), the top family of a run without any event.
+- Qwen3.8-27B-FP8 with the measured propensities: the largest hard-pool propensity of its two accepted strings is
+  4.38% (reasoning opener, rotation 1), so its exposure is at most 256 x 0.0438 x 0.0149 = 0.17 per step (Section
+  3.21 bounded it at 0.15 with the 4% dose in place of the measured propensity).
+- Held-out judges: each accepts at most three seeding strings at an FPR of 10% or more (General-Verifier 3,
+  Qwen2.5-7B 3, Qwen3.6 1), against 8, 3, 6 and 0 for the core judges; in their 5 runs with an event the winner was
+  ranked first by exposure in 5 and by FPR alone in 3 (the two misses: Qwen2.5-7B seeds 0 and 2, where FPR alone
+  points to the reasoning opener and "{" won).
+- Tests: `tests/test_descriptive.py`.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1544,19 +1571,62 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   without an event lost to a higher-exposure family in the same run (the exception: General-Verifier seed 2, top
   family at 2.74); the highest easy-pool exposure is 9.38. Open: the anonymized link, detector precision from the
   exploit hand audit, and arXiv BibTeX years (arXiv gives the latest version's year; switch to venue versions).
-- 2026-10-27: References checked for peer-reviewed versions (Semantic Scholar batch query, OpenReview search, PMLR,
+- 2026-10-26: References checked for peer-reviewed versions (Semantic Scholar batch query, OpenReview search, PMLR,
   NeurIPS proceedings, CrossRef) and replaced where one exists: Gao et al. (ICML 2023), Lightman et al. (ICLR 2024),
   Zheng et al. (NeurIPS 2023 Datasets and Benchmarks), Hendrycks et al. (NeurIPS 2021 Datasets and Benchmarks), Skalse
   et al. (NeurIPS 2022, published as "Defining and Characterizing Reward Gaming"), DAPO and General-Reasoner (NeurIPS
-  2025), DeepSeek-R1 (Nature 645, 2025) and vLLM (SOSP 2023); official BibTeX from those sources. No peer-reviewed
-  version exists for the rest: Huang et al. was withdrawn from ICLR 2026 and Zhao et al. rejected there, CATCH and
-  CHERRL are ICLR 2027 submissions, xVerify an ARR submission, and Countdown-Code has only its arXiv version (HANDOFF
-  section 11 lists it as ICLR 2026; that is not supported). arXiv entries now carry the year of their first version
-  (Huang et al. and Zhao et al. 2025), the Qwen2.5 report is credited to the Qwen Team, and titles protect proper
-  nouns and acronyms, since acl_natbib.bst lowercases titles.
-- 2026-10-27: Local builds go through `paper/build.sh`. TeX Live 2026 ships lineno v5.7, whose twocolumn code for LaTeX
+  2025), DeepSeek-R1 (Nature 645, 2025) and vLLM (SOSP 2023); official BibTeX from those sources. This pass missed
+  four published versions (Huang et al., Countdown-Code, xVerify, Thaman; see the correction below). arXiv entries now
+  carry the year of their first version (Zhao et al. 2025), the Qwen2.5 report is credited to the Qwen Team, and
+  titles protect proper nouns and acronyms, since acl_natbib.bst lowercases titles.
+- 2026-10-26: Local builds go through `paper/build.sh`. TeX Live 2026 ships lineno v5.7, whose twocolumn code for LaTeX
   formats from 2025-06-01 on puts the right column's review line numbers inside the left column; Overleaf is not
   affected. The script compiles against a temporary copy of the installed lineno.sty without that branch; the paper's
   files are unchanged. Appendix C now introduces Table 4 and gives the four judge prompt templates verbatim; Appendix D
   ends with a paragraph on the sensitivity analyses that introduces Table 5, now a column table in the text flow; the
   caption of Figure 1 explains the four colored dose numbers.
+- 2026-10-26: Correction to the reference check above. Four references listed as preprints have published versions,
+  now cited: Huang et al. (EMNLP 2026 main, pages 5787 to 5808), Countdown-Code (EMNLP 2026 main, pages 43345 to
+  43363), xVerify (Findings of EMNLP 2026, pages 3335 to 3371) and Thaman (ICML 2026, PMLR 306, pages 120372 to
+  120389). The first pass missed them because it relied on Semantic Scholar venue fields and OpenReview, where Huang
+  et al. appears only as a withdrawn ICLR 2026 submission and xVerify only as an ARR submission. The check now also reads the arXiv
+  comments field of every arXiv entry ("EMNLP 2026 Main Conference", "EMNLP 2026 camera ready", "Accepted to ICML
+  2026") and searches the 2026 ACL Anthology volumes and PMLR volume 306. BibTeX comes from the ACL Anthology and
+  PMLR; the Anthology record of xVerify writes one surname in lowercase ("li", fixed) and spells "Mingchuan Yang"
+  where arXiv has "Minchuan", and the published spelling is kept. The remaining preprints have no archival version:
+  Zhao et al. (not accepted at ICLR 2026), CATCH, CHERRL and Plesner et al. (ICLR 2027 submissions), Mahmoud et al.
+  (ICML 2026 AIWILD workshop, cited as arXiv), Ray et al., DeepSeekMath, the Qwen2.5 and Qwen2.5-Math reports, GSM8K
+  and Amodei et al. (arXiv only). HANDOFF section 11 lists Countdown-Code as ICLR 2026; its venue is EMNLP 2026.
+  Checked against the published texts: the two Huang et al. prompts are still in their Appendix E, Figure 7, with
+  the same bold phrases; there are still 13 hacking pattern types; their hypothesis on DeepSeek-R1-Distill-Qwen-1.5B
+  is unchanged; Countdown-Code still reports that 1% contamination of distillation SFT data makes hacking resurface
+  in RL. New in the EMNLP version of Huang et al.: discriminative verifiers are far more robust to hacking patterns
+  (xVerify-0.5B-I success rates 0.0 to 0.4% in their Table 3), and an RL run with xVerify-3B-Ia shows no hacking
+  (their Appendix O, Table 13). The related work had credited this robustness to the xVerify paper, which does not
+  test hacking patterns; the sentence now cites Huang et al. for it. Citations of Huang et al. now read 2026; the
+  README reference list points to the EMNLP version.
+- 2026-10-26: Paper revised for tone and four clarifications after a read from the reviewer's side
+  (`paper/main.tex`). Clarifications: the 14 events split into 9 in 7 of the 24 core runs and 5 in 5 of the 9
+  held-out runs, with none in the 3 control runs; the exposure threshold is stated as 1.92 with the exception named
+  (Section 3.28; the exception is not the family at 1.90 just below it); propensity is noted as measured on each
+  run's own checkpoint and pool; the selection of the third held-out judge by the rule of Section 3.21, with
+  Qwen3.8-27B failing it, is in Setting and Appendix C; the H2 paragraph gives the acceptance gap within DeepScaleR
+  problems (Section 3.28). Tone: the protocol history (freeze, tag, queue, amendment) is gone from the main text and
+  captions, stated once in the design ("the event definition and all five tests were fixed before the first run,
+  and every exposure score was recorded from static measurements before the run it predicts"), and the amendment
+  that added Qwen3.6 stays as one sentence in Appendix C, since the paper claims a pre-registered analysis. Results
+  paragraphs end on their findings: early growth is explained as FPR setting its direction and propensity its base,
+  with the takeover needing a few hundred rewarded responses (Section 3.28); the H3 paragraph reports the dose
+  gradient, the statistic (second largest possible), the specified two-sided p = 0.056 with the one-sided 0.033,
+  the matched control and the winner logit; the held-out paragraph leads with 5 of 5 winners ranked first. The
+  unseeded result is presented as what the account predicts (about 8 family responses per run of 76,800), and the
+  Limitations describe the winner-take-all structure (12 of 21 seeded hard-pool runs, 57%, with one or two events
+  each). The main text still ends on page 7; both PDFs rebuilt without overfull boxes.
+- 2026-10-26: Punctuation pass over the paper prose (`paper/main.tex`, main text, captions and appendices; the
+  verbatim prompts, seeding strings and tables unchanged). Colons that introduced an explanation and semicolons that
+  joined two sentences were replaced by a clause (because, since, which, while, so) or split into two sentences.
+  Counted outside comments, verbatim blocks, quoted strings, labels and references: 35 colons and 58 semicolons
+  before, 2 colons and 3 semicolons after. The two colons introduce the list of findings in the introduction and the
+  list of core judges in Setting; the three semicolons separate that list's items, which contain commas. No number or
+  claim changed. The convention is noted in the header comment of main.tex. Both PDFs rebuilt (main text ends on
+  page 7, no overfull boxes).

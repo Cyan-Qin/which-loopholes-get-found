@@ -120,7 +120,7 @@ Every step resumes after an interruption: rerun the same command. Commands run f
 **1. Data and pools.** `scripts/setup_gpu.sh` already runs the first two commands.
 
 ```bash
-python -m src.data.download_hacking                          # hacking set of Huang et al. (2025)
+python -m src.data.download_hacking                          # hacking set of Huang et al. (2026)
 python -m src.data.build_pool                                # 21,845 integer-answer candidate problems
 python -m src.data.difficulty --run-dir runs/difficulty      # GPU: 8 samples per problem
 python -m src.data.pools --difficulty-run runs/difficulty    # hard (1-2 of 8 correct), easy (5-7 of 8)
@@ -153,7 +153,11 @@ python -m src.analysis.primary            # H1: AUROC, run bootstrap, paired dif
 python -m src.analysis.confirmatory       # H2, H3 and Holm over the five tests
 python -m src.analysis.secondary          # competing risks, early growth, winner conditional logit
 python -m src.analysis.sensitivity        # event thresholds, likelihood propensity, family-mean FPR
+python -m src.analysis.descriptive        # rewards before each event; acceptance by problem source
 ```
+
+The last command also reads the full evaluation logs in `runs/grpo/<run>/eval.jsonl`, which step 3 writes
+and the repository does not include; its outputs are committed in `results/analysis/`.
 
 **5. Figures.** `pip install -r figures/requirements.txt`, then `python -m figures.make_all` redraws every
 figure of the paper from the committed results (PDF with embedded fonts, sized for the ACL column and
@@ -273,7 +277,7 @@ controlled seeding. Events are few (14 in 12 runs), held-out judges are three, t
 
 ## References
 
-1. Huang et al. 2025. From Accuracy to Robustness: A Study of Rule- and Model-based Verifiers in
-   Mathematical Reasoning. arXiv:2505.22203.
+1. Huang et al. 2026. From Accuracy to Robustness: A Study of Rule- and Model-based Verifiers in
+   Mathematical Reasoning. In Proceedings of EMNLP 2026. https://aclanthology.org/2026.emnlp-main.255/
 2. Zhao et al. 2025. One Token to Fool LLM-as-a-Judge. arXiv:2507.08794.
 3. Shao et al. 2024. DeepSeekMath. arXiv:2402.03300.

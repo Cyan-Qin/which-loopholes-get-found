@@ -1,0 +1,4 @@
+# The demo (demo/app.py): only what the interface needs on top of pandas.
+# Install with: pip install -r demo/requirements.txt
+gradio==6.29.1
+pandas

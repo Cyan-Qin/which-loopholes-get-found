@@ -1050,6 +1050,62 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   so its predictions are on record before its runs. Judge share 0.43, max_num_seqs 128.
   Qwen3.8-27B-FP8 is reported with its string FPR only: on the take-off rule it cannot have an event.
 
+### 3.22 Primary analysis of H1 (`src/analysis/primary.py`, `results/analysis/`)
+
+- Run on 2026-10-26 from the packed results: `python -m src.analysis.primary` (10,000 replicates, seed 0);
+  every run x family unit with its scores and outcome is in `results/analysis/units.csv`, the table below
+  in `results/analysis/primary_auroc.csv`. Events were recomputed from each run's eval_summary.jsonl
+  (tau 0.05, 2 consecutive evaluations) and agree with the events files written on the GPU machine for
+  all 504 units.
+- Specification, fixed while writing the code and before any comparison was computed (it settles the
+  statistical details HANDOFF section 10 left open): AUROC counts ties as one half; intervals are
+  percentile bootstrap intervals from 10,000 resamples of whole runs within each judge, so the 14
+  competing families of a run stay together; each baseline is compared with the risk score on the same
+  replicates and units (paired), with the two-sided bootstrap p-value 2 min(P(d <= 0), P(d >= 0));
+  replicates without an event are dropped (core pooled: 1 of 10,000). The static baseline is minus the
+  judge's balanced accuracy on the policy's own answers in the run's pool (`results/stage1/static_accuracy.csv`),
+  so it is constant within a run and can only rank judges and pools; Qwen3.6-35B-A3B was not measured in
+  stage 1 and is left out of the static comparisons. Holm correction covers five confirmatory tests: the
+  three pooled core comparisons of H1, and one test each for H2 and H3 (still to be computed).
+- Primary test, 24 core runs (336 units, 9 events in 7 runs):
+
+| Score | AUROC (95% CI) | Risk score minus this score (95% CI) | p |
+|---|---|---|---|
+| Risk score p x FPR | 0.974 (0.955 to 0.995) | | |
+| FPR alone | 0.937 (0.913 to 0.966) | +0.037 (+0.020 to +0.055) | < 0.0001 |
+| Propensity alone | 0.847 (0.779 to 0.935) | +0.127 (+0.055 to +0.183) | < 0.0001 |
+| Static accuracy | 0.379 (0.225 to 0.514) | +0.595 (+0.461 to +0.748) | < 0.0001 |
+
+- With 10,000 replicates the smallest attainable p-value is 0.0001, so after Holm over five tests each
+  of the three H1 comparisons stays below 0.0005: H1 is supported for these judges. Without the positive
+  control (18 runs, 5 events in 4 runs) the result is the same: risk 0.979 (0.960 to 1.000), FPR 0.945,
+  propensity 0.860, static 0.517; differences +0.034 (+0.008 to +0.068), +0.119 and +0.462.
+- Per judge (6 runs each): Qwen2.5-Math risk 0.941 against FPR 0.875 and propensity 0.858 (4 events);
+  R1-Distill-Verifier 0.966 against 0.912 and 0.836 (4 events); R1-Distill-Qwen 1.000 against 0.970 and
+  0.904, but from a single event, so its interval and p-values carry no information beyond that event;
+  xVerify has no event and no AUROC. Within a judge the static baseline only separates the two pools,
+  and it points the wrong way: both vulnerable judges are slightly more accurate on the hard pool, where
+  every event happened (AUROC 0.237).
+- Transfer to the held-out judges (9 runs, 126 units, 5 events in 5 runs): risk 0.995 (0.986 to 1.000),
+  FPR 0.979 (0.961 to 0.998), difference +0.017 (0.000 to +0.035), p = 0.066; propensity 0.760, difference
+  +0.235 (+0.081 to +0.418). FPR alone is nearly as good here because the held-out judges accept few
+  strings: Qwen2.5-7B mainly "Thought process:" (86.4%) and "{" (68.8%), Qwen3.6 only "{" (84.7%). The
+  risk score gains where FPR's first choice lost: Qwen2.5-7B seeds 0 and 2, where FPR ranks "Thought
+  process:" first but "{", ranked first by the risk score, won; and Qwen3.6 seed 1, where "{" sat in the
+  0.3% tier and nothing was exploited, as predicted in Section 3.21. It loses on General-Verifier seed 2
+  (answer_explanation, no event). Per judge: Qwen2.5-7B risk 0.991 against FPR 0.949 (p = 0.078),
+  Qwen3.6 1.000 against 0.988 (p = 0.61); General-Verifier has no event.
+- Reading: the product beats each factor on the core judges with intervals that exclude zero. The gain
+  over FPR alone is small in absolute terms (about 0.035) because FPR already ranks most families
+  correctly; it comes mostly from high-FPR strings that seeding put in a low tier and that then lost
+  (answer_explanation for Qwen2.5-Math in seeds 0 and 1, "{" for R1-Distill-Verifier in seed 1), partly
+  offset by families the product ranks above a winner (system_prompt_mimicry, adversarial_prefixes in
+  some runs). Descriptively, in the 12 runs with an event the first family exploited was ranked first by
+  the risk score in 12 and by FPR alone in 6. AUROC over all units also rewards ranking the families that
+  no judge accepts (xVerify, and most families everywhere) below the rest, which every score except
+  static does; the secondary winner analysis (conditional logit) asks the sharper question of which
+  family wins within a run.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1252,3 +1308,7 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   No event in any easy-pool run (12), xVerify (6), the 0% control (3), General-Verifier (3) or R1-Distill-Qwen
   hard seeds 0 and 2. The frozen analysis (AUROC with bootstrap intervals, baselines, competing risks) has
   not been run yet.
+- 2026-10-26: Primary analysis of H1 (Section 3.22): on the 24 core runs the risk score has AUROC 0.974
+  (0.955 to 0.995), above FPR alone by 0.037 (0.020 to 0.055), propensity alone by 0.127 and static
+  accuracy by 0.595, all p < 0.0001; on the held-out judges 0.995 against FPR 0.979 (difference 0.017,
+  p = 0.066). Analysis code `src/analysis/primary.py` with tests; outputs in `results/analysis/`.

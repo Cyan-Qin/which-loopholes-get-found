@@ -1,0 +1,113 @@
+{
+ "auroc": [
+  {
+   "analysis": "core pooled",
+   "runs": 24,
+   "events": 9,
+   "score": "risk",
+   "auroc": 0.9741760108732586,
+   "ci_low": 0.9552234537663572,
+   "ci_high": 0.9954545454545456
+  },
+  {
+   "analysis": "core pooled",
+   "runs": 24,
+   "events": 9,
+   "score": "fpr",
+   "auroc": 0.9373088685015292,
+   "ci_low": 0.9129396439426836,
+   "ci_high": 0.9664634146341464
+  },
+  {
+   "analysis": "core pooled",
+   "runs": 24,
+   "events": 9,
+   "score": "p_hat",
+   "auroc": 0.8472646958885491,
+   "ci_low": 0.7786679716099877,
+   "ci_high": 0.9351066303276668
+  },
+  {
+   "analysis": "core pooled",
+   "runs": 24,
+   "events": 9,
+   "score": "static",
+   "auroc": 0.3786952089704383,
+   "ci_low": 0.2250755287009063,
+   "ci_high": 0.5141987829614605
+  },
+  {
+   "analysis": "held-out pooled",
+   "runs": 9,
+   "events": 5,
+   "score": "risk",
+   "auroc": 0.9950413223140496,
+   "ci_low": 0.9861111111111112,
+   "ci_high": 1.0
+  },
+  {
+   "analysis": "held-out pooled",
+   "runs": 9,
+   "events": 5,
+   "score": "fpr",
+   "auroc": 0.9785123966942147,
+   "ci_low": 0.9610655737704918,
+   "ci_high": 0.9983471074380166
+  },
+  {
+   "analysis": "held-out pooled",
+   "runs": 9,
+   "events": 5,
+   "score": "p_hat",
+   "auroc": 0.7603305785123967,
+   "ci_low": 0.5752066115702479,
+   "ci_high": 0.9194444444444444
+  },
+  {
+   "analysis": "held-out pooled",
+   "runs": 9,
+   "events": 5,
+   "score": "static",
+   "auroc": 0.7592592592592593,
+   "ci_low": 0.7592592592592593,
+   "ci_high": 0.7592592592592593
+  }
+ ],
+ "confirmatory": [
+  {
+   "test": "H1 risk score vs FPR alone",
+   "detail": "AUROC difference, 95% CI +0.020 to +0.055",
+   "p": 0.0001,
+   "p_holm": 0.0005,
+   "reject_at_0.05": true
+  },
+  {
+   "test": "H1 risk score vs propensity alone",
+   "detail": "AUROC difference, 95% CI +0.055 to +0.183",
+   "p": 0.0001,
+   "p_holm": 0.0005,
+   "reject_at_0.05": true
+  },
+  {
+   "test": "H1 risk score vs static accuracy",
+   "detail": "AUROC difference, 95% CI +0.461 to +0.748",
+   "p": 0.0001,
+   "p_holm": 0.0005,
+   "reject_at_0.05": true
+  },
+  {
+   "test": "H2 hard vs easy pool",
+   "detail": "7 pairs with an event only on the hard pool, 0 only on the easy pool, of 12",
+   "p": 0.015625,
+   "p_holm": 0.03125,
+   "reject_at_0.05": true
+  },
+  {
+   "test": "H3 dose response over the seeding tiers",
+   "detail": "sum of tier ranks of 9 events 25 against a null mean of 18.14",
+   "p": 0.0557775557775557,
+   "p_holm": 0.0557775557775557,
+   "reject_at_0.05": false
+  }
+ ]
+}

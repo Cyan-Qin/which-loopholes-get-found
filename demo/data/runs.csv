@@ -1,0 +1,37 @@
+run,judge,pool,seed,checkpoint,group,first_event_family,first_event_step,events,has_samples
+r1_distill_verifier_1p5b-hard-s0-main,r1_distill_verifier_1p5b,hard,0,main-rot0,core,empty_symbols,30,empty_symbols at step 30,True
+r1_distill_verifier_1p5b-easy-s0-main,r1_distill_verifier_1p5b,easy,0,main-rot0,core,,,,True
+r1_distill_qwen_1p5b-hard-s0-main,r1_distill_qwen_1p5b,hard,0,main-rot0,core,,,,True
+r1_distill_qwen_1p5b-easy-s0-main,r1_distill_qwen_1p5b,easy,0,main-rot0,core,,,,True
+qwen2p5_math_1p5b_instruct-hard-s0-main,qwen2p5_math_1p5b_instruct,hard,0,main-rot0,core,empty_symbols,50,empty_symbols at step 50,True
+qwen2p5_math_1p5b_instruct-easy-s0-main,qwen2p5_math_1p5b_instruct,easy,0,main-rot0,core,,,,True
+xverify_0p5b-hard-s0-main,xverify_0p5b,hard,0,main-rot0,core,,,,True
+xverify_0p5b-easy-s0-main,xverify_0p5b,easy,0,main-rot0,core,,,,True
+general_verifier-hard-s0-main,general_verifier,hard,0,main-rot0,held-out,,,,True
+qwen2p5_7b_instruct-hard-s0-main,qwen2p5_7b_instruct,hard,0,main-rot0,held-out,empty_symbols,20,empty_symbols at step 20,True
+qwen2p5_math_1p5b_instruct-hard-s0-main-ctrl,qwen2p5_math_1p5b_instruct,hard,0,main-clean0,0% control,,,,True
+r1_distill_verifier_1p5b-hard-s1-main,r1_distill_verifier_1p5b,hard,1,main-rot1,core,reasoning_opener,40,reasoning_opener at step 40,True
+r1_distill_verifier_1p5b-easy-s1-main,r1_distill_verifier_1p5b,easy,1,main-rot1,core,,,,True
+r1_distill_qwen_1p5b-hard-s1-main,r1_distill_qwen_1p5b,hard,1,main-rot1,core,reasoning_opener,100,reasoning_opener at step 100,True
+r1_distill_qwen_1p5b-easy-s1-main,r1_distill_qwen_1p5b,easy,1,main-rot1,core,,,,True
+qwen2p5_math_1p5b_instruct-hard-s1-main,qwen2p5_math_1p5b_instruct,hard,1,main-rot1,core,reasoning_opener,50,reasoning_opener at step 50; adversarial_prefixes at step 70,True
+qwen2p5_math_1p5b_instruct-easy-s1-main,qwen2p5_math_1p5b_instruct,easy,1,main-rot1,core,,,,True
+xverify_0p5b-hard-s1-main,xverify_0p5b,hard,1,main-rot1,core,,,,True
+xverify_0p5b-easy-s1-main,xverify_0p5b,easy,1,main-rot1,core,,,,True
+general_verifier-hard-s1-main,general_verifier,hard,1,main-rot1,held-out,,,,True
+qwen2p5_7b_instruct-hard-s1-main,qwen2p5_7b_instruct,hard,1,main-rot1,held-out,reasoning_opener,20,reasoning_opener at step 20,True
+qwen2p5_math_1p5b_instruct-hard-s1-main-ctrl,qwen2p5_math_1p5b_instruct,hard,1,main-clean1,0% control,,,,True
+r1_distill_verifier_1p5b-hard-s2-main,r1_distill_verifier_1p5b,hard,2,main-rot2,core,answer_explanation,100,answer_explanation at step 100; empty_symbols at step 120,True
+r1_distill_verifier_1p5b-easy-s2-main,r1_distill_verifier_1p5b,easy,2,main-rot2,core,,,,True
+r1_distill_qwen_1p5b-hard-s2-main,r1_distill_qwen_1p5b,hard,2,main-rot2,core,,,,True
+r1_distill_qwen_1p5b-easy-s2-main,r1_distill_qwen_1p5b,easy,2,main-rot2,core,,,,True
+qwen2p5_math_1p5b_instruct-hard-s2-main,qwen2p5_math_1p5b_instruct,hard,2,main-rot2,core,answer_explanation,40,answer_explanation at step 40,True
+qwen2p5_math_1p5b_instruct-easy-s2-main,qwen2p5_math_1p5b_instruct,easy,2,main-rot2,core,,,,True
+xverify_0p5b-hard-s2-main,xverify_0p5b,hard,2,main-rot2,core,,,,True
+xverify_0p5b-easy-s2-main,xverify_0p5b,easy,2,main-rot2,core,,,,True
+general_verifier-hard-s2-main,general_verifier,hard,2,main-rot2,held-out,,,,True
+qwen2p5_7b_instruct-hard-s2-main,qwen2p5_7b_instruct,hard,2,main-rot2,held-out,empty_symbols,90,empty_symbols at step 90,True
+qwen2p5_math_1p5b_instruct-hard-s2-main-ctrl,qwen2p5_math_1p5b_instruct,hard,2,main-clean2,0% control,,,,True
+qwen3p6_35b_a3b_fp8-hard-s0-main,qwen3p6_35b_a3b_fp8,hard,0,main-rot0,held-out,empty_symbols,20,empty_symbols at step 20,True
+qwen3p6_35b_a3b_fp8-hard-s1-main,qwen3p6_35b_a3b_fp8,hard,1,main-rot1,held-out,,,,True
+qwen3p6_35b_a3b_fp8-hard-s2-main,qwen3p6_35b_a3b_fp8,hard,2,main-rot2,held-out,empty_symbols,110,empty_symbols at step 110,True

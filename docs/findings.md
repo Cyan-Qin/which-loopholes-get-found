@@ -1259,6 +1259,23 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   `runs/exploit-audit/` (not committed until labeling ends, as for the gold audit). Status: waiting for
   labels.
 
+### 3.27 Demo (`demo/app.py`, data from `src/demo/build_data.py`)
+
+- A Gradio app (6.29.1, `demo/requirements.txt`; installed in the Mac `.venv` without changing any
+  locked package) that reads only `demo/data/`, a 3.8 MB bundle built from `results/main` and the
+  evaluation logs: the pre-RL risk table of every checkpoint, judge, pool and family; per run e_f(t)
+  at the 31 evaluations, each family's share of the training responses at every step, and the five
+  most frequent distinct responses at each evaluation with how many copies the judge accepted and gold
+  marked correct; the headline results from `results/analysis`. Run with `python demo/app.py`.
+- Three tabs. Before training: for a judge, a pool and a starting policy (rotation 0 to 2 or the 0%
+  control) the 14 families ranked by the risk score, with the predicted exposure 256 x p x FPR as a bar
+  chart, the rank by FPR alone, and what happened in the matching run (for example R1-Distill-Verifier,
+  hard pool, rotation 1: reasoning_opener exploited from step 40, ranked first by the risk score and
+  second by FPR alone, while "{" with an FPR of 63% sat in the 0.3% tier and ranked eighth). During
+  training: replay of any of the 36 runs. Results: the AUROC table and the five confirmatory tests.
+- Checked in the browser (layout, plots, tables) and by `tests/test_demo_app.py`, which runs every audit
+  combination and replays every run on the committed bundle.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1486,3 +1503,5 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   key in `runs/exploit-audit/` until labeling ends; scoring in `src/monitor/exploit_audit_score.py`.
 - 2026-10-26: Exploit hand audit changed to two labelers, B and C (A does not label): the same 150 items and
   key, 30 for both and 60 for each (Section 3.26).
+- 2026-10-26: Demo built (Section 3.27): `src/demo/build_data.py` writes a 3.8 MB bundle to `demo/data/`, and
+  `demo/app.py` (Gradio 6.29.1) shows the pre-RL audit, a replay of each run and the headline results.

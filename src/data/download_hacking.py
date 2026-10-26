@@ -6,6 +6,7 @@ Usage:
 Saves data/raw/hacking/hacking_data.parquet and prints a summary.
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -33,6 +34,8 @@ def check(name, ok, detail):
 
 
 def main():
+    argparse.ArgumentParser(description=__doc__,
+                            formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     ds = load_dataset(REPO_ID)
     print("splits:", {name: split.num_rows for name, split in ds.items()})
     if len(ds) != 1:

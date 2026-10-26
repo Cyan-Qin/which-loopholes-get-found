@@ -15,6 +15,7 @@ data/processed/pool_summary.json. The split into easy and hard pools needs
 policy samples and happens later.
 """
 
+import argparse
 import hashlib
 import json
 import re
@@ -104,6 +105,8 @@ def by_source(df):
 
 
 def main():
+    argparse.ArgumentParser(description=__doc__,
+                            formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     cfg = yaml.safe_load(CONFIG.read_text())["prompt"]
     df = load_sources()
     df["key"] = df["problem"].map(problem_key)

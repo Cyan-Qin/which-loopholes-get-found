@@ -1,0 +1,8 @@
+group,dose,units,events
+control,0.0,42,0
+core,0.003,112,0
+core,0.012,112,2
+core,0.04,112,7
+held_out,0.003,42,0
+held_out,0.012,42,2
+held_out,0.04,42,3

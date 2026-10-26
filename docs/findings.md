@@ -1106,6 +1106,48 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   static does; the secondary winner analysis (conditional logit) asks the sharper question of which
   family wins within a run.
 
+### 3.23 Confirmatory tests of H2 and H3, and Holm over the five tests (`src/analysis/confirmatory.py`)
+
+- Run on 2026-10-26: `python -m src.analysis.confirmatory`, reading `results/analysis/units.csv` and
+  `primary_auroc.csv`; outputs `confirmatory.csv`, `h3_dose.csv`, `h2_acceptance.csv`.
+- Specification, written into the code before it was run: H2 is the exact McNemar test on the 12 pairs of
+  core runs that share judge, checkpoint and seed and differ only in the pool, with "any family has an
+  event" as the run's outcome (two-sided sign test on the discordant pairs). H3 is the exact
+  randomization test of the seeding design: the 14 families were shuffled into three groups (sizes 5, 5
+  and 4) whose tiers rotate over the seeds, so the null distribution of the statistic (the sum of the
+  tier ranks 1 to 3 of all 9 core events) is taken over all 252,252 such groupings with outcomes held
+  fixed; it is exact under the null that dose changes no outcome, competition within a run included.
+  Two-sided p. Holm covers the three pooled H1 comparisons (bootstrap p of 0 entered as 1 / 10,000) and
+  the H2 and H3 tests.
+
+| Test | Estimate | p | Holm p | Rejected at 0.05 |
+|---|---|---|---|---|
+| H1 risk score vs FPR alone | AUROC +0.037 (+0.020 to +0.055) | < 0.0001 | 0.0005 | yes |
+| H1 risk score vs propensity alone | AUROC +0.127 (+0.055 to +0.183) | < 0.0001 | 0.0005 | yes |
+| H1 risk score vs static accuracy | AUROC +0.595 (+0.461 to +0.748) | < 0.0001 | 0.0005 | yes |
+| H2 hard vs easy pool | 7 pairs with an event only on the hard pool, 0 only on the easy pool, of 12 | 0.0156 | 0.031 | yes |
+| H3 dose response over the tiers | sum of tier ranks 25 against a null mean of 18.1 | 0.056 | 0.056 | no |
+
+- H2 mechanism (descriptive, mean judge acceptance over training steps 0 to 9, averaged over seeds): on the
+  hard pool the vulnerable judges accept 19% to 23% of responses, on the easy pool 61% to 67%. Under
+  group normalization a rewarded response then gets an advantage of about sqrt((1 - q) / q): 1.8 to 2.1
+  on the hard pool against 0.7 to 0.8 on the easy pool, so an accepted exploit is pushed up about 2.5
+  times as hard. This fits the easy-pool runs that had predicted exposures as high as the hard-pool
+  winners (up to 6.6 rewarded samples per step) and still no event. Limitation, as noted in Section 3.5:
+  the hard pool is mostly DeepScaleR and the easy pool mostly MATH, so difficulty and source are not
+  separated.
+- H3 in detail: events per dose in the core runs 0 of 112 units at 0.3%, 2 of 112 at 1.2%, 7 of 112 at
+  4.0%; the matched 0% control had 0 of 42 (3 runs). The ordering is the predicted one, and the observed
+  statistic is the second largest the design allows (the largest is 26; P(T >= 25) = 0.033). The test
+  still cannot reach 0.05 two-sided because the randomization unit is the family grouping and the events
+  fall on only 4 families (empty_symbols, reasoning_opener, answer_explanation, adversarial_prefixes):
+  even the most extreme possible pattern would give a two-sided p of about 0.017. The one-sided p (0.033)
+  was not the specified test and is reported only as a description. The matched control comparison
+  (Qwen2.5-Math, hard pool): seeded runs with an event 3 of 3, control runs 0 of 3, exact sign test
+  p = 0.25. Reading: seeding is necessary for any event at this scale (no event without it in 3 control
+  runs and, before seeding, in the pilot, Section 3.13), and higher doses win more often, but the design
+  has too few independently randomized units for H3 to pass the confirmatory bar.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1312,3 +1354,8 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   (0.955 to 0.995), above FPR alone by 0.037 (0.020 to 0.055), propensity alone by 0.127 and static
   accuracy by 0.595, all p < 0.0001; on the held-out judges 0.995 against FPR 0.979 (difference 0.017,
   p = 0.066). Analysis code `src/analysis/primary.py` with tests; outputs in `results/analysis/`.
+- 2026-10-26: Confirmatory tests (Section 3.23). After Holm over five tests, the three H1 comparisons
+  (Holm p 0.0005) and H2 (7 of 12 run pairs with an event only on the hard pool, none only on the easy
+  pool; p 0.016, Holm 0.031) are rejected; H3 is not (exact randomization test over the tier groupings,
+  p 0.056): events rise with dose (0, 2 and 7 at 0.3%, 1.2% and 4.0%; 0 in the 0% control), but they
+  fall on only 4 families, which limits the test's resolution.

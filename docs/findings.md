@@ -1532,3 +1532,31 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   and the EleutherAI repository. That repository is titled "Leading Indicators of Reward Hacking", not "Early
   Indicators" as noted in HANDOFF section 11; its blog post is still to be verified. The README now gives the
   full title of Huang et al., confirmed by the arXiv API.
+- 2026-10-26: Full first draft of the paper (`paper/main.tex`): every section written, three appendix tables generated
+  from the configs and results (families and seeding strings, judges, sensitivity), main text about 6 of the 8
+  allowed pages, 11 pages in all, no overfull boxes. Checked against the papers' own text: Huang et al. (2505.22203,
+  Section 7.2) report that DS-R1-Distill-Qwen-1.5B shows no reward hacking in RL despite high probe success and
+  "hypothesize that this is because the policy models in our RL training are not strong enough"; their RL policy
+  is Qwen2.5-7B Base with a hybrid verifier. CATCH (2609.39533) controls the initial hacking tendency by SFT mixtures
+  and reward difficulty and finds both shape emergence, the closest analogue of H2 and H3, now discussed in related
+  work; Countdown-Code (2603.07084) is cited for 1% SFT contamination resurfacing in RL. New exact numbers used in the
+  text: the lowest exposure of any event is 1.92 rewarded responses per step; 9 of the 10 hard-pool families above it
+  without an event lost to a higher-exposure family in the same run (the exception: General-Verifier seed 2, top
+  family at 2.74); the highest easy-pool exposure is 9.38. Open: the anonymized link, detector precision from the
+  exploit hand audit, and arXiv BibTeX years (arXiv gives the latest version's year; switch to venue versions).
+- 2026-10-27: References checked for peer-reviewed versions (Semantic Scholar batch query, OpenReview search, PMLR,
+  NeurIPS proceedings, CrossRef) and replaced where one exists: Gao et al. (ICML 2023), Lightman et al. (ICLR 2024),
+  Zheng et al. (NeurIPS 2023 Datasets and Benchmarks), Hendrycks et al. (NeurIPS 2021 Datasets and Benchmarks), Skalse
+  et al. (NeurIPS 2022, published as "Defining and Characterizing Reward Gaming"), DAPO and General-Reasoner (NeurIPS
+  2025), DeepSeek-R1 (Nature 645, 2025) and vLLM (SOSP 2023); official BibTeX from those sources. No peer-reviewed
+  version exists for the rest: Huang et al. was withdrawn from ICLR 2026 and Zhao et al. rejected there, CATCH and
+  CHERRL are ICLR 2027 submissions, xVerify an ARR submission, and Countdown-Code has only its arXiv version (HANDOFF
+  section 11 lists it as ICLR 2026; that is not supported). arXiv entries now carry the year of their first version
+  (Huang et al. and Zhao et al. 2025), the Qwen2.5 report is credited to the Qwen Team, and titles protect proper
+  nouns and acronyms, since acl_natbib.bst lowercases titles.
+- 2026-10-27: Local builds go through `paper/build.sh`. TeX Live 2026 ships lineno v5.7, whose twocolumn code for LaTeX
+  formats from 2025-06-01 on puts the right column's review line numbers inside the left column; Overleaf is not
+  affected. The script compiles against a temporary copy of the installed lineno.sty without that branch; the paper's
+  files are unchanged. Appendix C now introduces Table 4 and gives the four judge prompt templates verbatim; Appendix D
+  ends with a paragraph on the sensitivity analyses that introduces Table 5, now a column table in the text flow; the
+  caption of Figure 1 explains the four colored dose numbers.

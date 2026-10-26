@@ -1516,3 +1516,10 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   cards (xVerify-0.5B-I is CC BY-NC-ND 4.0, used for inference only; MATH-500 states none), intended use,
   risks and limitations, and a citation entry. The code is released under the MIT License (`LICENSE`,
   copyright the three authors).
+- 2026-10-26: Paper figures drawn from the committed results (`figures/`, `python -m figures.make_all`, matplotlib
+  3.11.2 in `figures/requirements.txt`; Times, Okabe-Ito colours, TrueType fonts embedded, ACL widths 6.3 and
+  3.0 in): takeover in the three seeds of R1-Distill-Verifier on the hard pool (each seed's 4.0% family among
+  the top-FPR ones wins first; in seed 2 "{" at 1.2% overtakes answer explanation after its event), the
+  seeding-string FPR heatmap of the 7 judges, exposure against the largest rise of e_f for all 462 seeded
+  units with the winner's rank under each score, the AUROC forest plot, and difficulty and dose (time to
+  the first event by pool, early acceptance and advantage, event rate by seeded share).

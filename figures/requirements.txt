@@ -1,0 +1,3 @@
+# Paper figures (figures/*.py): only what plotting needs on top of requirements.txt.
+# Install with: pip install -r figures/requirements.txt
+matplotlib==3.11.2

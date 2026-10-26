@@ -85,6 +85,7 @@ results/
   analysis/         every analysis output (units, AUROC tables, tests, hazards, sensitivity)
 audits/             blind hand-audit sheets and labels (gold checker, exploits)
 demo/               Gradio app and its data bundle
+figures/            the paper's figures (PDF and PNG) and the scripts that draw them from results/
 docs/findings.md    research log: every result, decision and deviation, with its source
 tests/              unit and integration tests (pytest)
 ```
@@ -153,6 +154,10 @@ python -m src.analysis.confirmatory       # H2, H3 and Holm over the five tests
 python -m src.analysis.secondary          # competing risks, early growth, winner conditional logit
 python -m src.analysis.sensitivity        # event thresholds, likelihood propensity, family-mean FPR
 ```
+
+**5. Figures.** `pip install -r figures/requirements.txt`, then `python -m figures.make_all` redraws every
+figure of the paper from the committed results (PDF with embedded fonts, sized for the ACL column and
+text widths).
 
 ## Experimental details
 

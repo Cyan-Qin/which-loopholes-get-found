@@ -23,7 +23,7 @@ check that our judge audit reproduces [1].
 |---|---|---|
 | Judge FPR roughly matches [1] | Done: 4 of 6 judges match; the two R1-style judges are lower; a 4096-token limit closes only part of the gap | Sections 3.6, 3.9 |
 | Q4: does sampled propensity separate families? | Answered: no. 19 of 174,760 base-policy responses fall in any family (1 within the pools), so the string-likelihood fallback applies; likelihoods computed | Sections 3.4, 3.7 |
-| Q1: gold labels agree with a hand audit (>= 95%) | Passed: 99.7% weighted agreement (190 of 195 decided items); all 5 misses are correct answers without a usable box | Section 3.5 |
+| Q1: gold labels agree with a hand audit (>= 95%) | Passed: 99.7% weighted agreement (195 of 200 items); all 5 misses are correct answers without a usable box | Section 3.5 |
 | Q2: can the pipeline see hacking (engineered judge)? | Yes: at full scale the engineered loophole takes off after about 130 steps; event at step 150 with tau 0.05 | Section 3.13 |
 | Q3: is the positive control exploited at our scale? | Not with natural propensities (no family event in 300 steps). With seeding, yes: one family takes over every run (seed2pct, rot0, rot0s) | Sections 3.13, 3.16, 3.18, 3.19 |
 
@@ -468,10 +468,11 @@ Gold hand audit results (labelled by the team on 2026-10-17; `audits/gold/labels
 | Correct by an equivalent form | 0.4% | 30 of 30 | 88.6% to 100% |
 | Wrong, with a boxed answer | 76.3% | 60 of 60 | 94.0% to 100% |
 | No boxed answer, finished | 1.1% | 15 of 20 | 53.1% to 88.8% |
-| Truncated | 2.2% | 15 of 15 (5 undecided) | 79.6% to 100% |
+| Truncated | 2.2% | 20 of 20 | 83.9% to 100% |
 
-- Weighted agreement 99.7% (raw 190 of 195 decided items, 97.4%): pilot Q1 passes the 95% bar. Even if
-  all 5 undecided truncated items were correct answers, the weighted agreement would be 99.2%.
+- Weighted agreement 99.7% (raw 195 of 200 items, 97.5%): pilot Q1 passes the 95% bar. Before labeler A's
+  correction of 2026-10-24 (below) it was 99.7% over 190 of 195 decided items; the correction leaves the
+  weighted figure unchanged because the corrected items are truncated responses on which gold already agreed.
 - Gold never accepted a response that the humans judged wrong. Every disagreement is of one kind: a
   finished response with the right final answer and no usable box. The answer is in plain text (g069,
   "the last page ... contains 6 stamps"), in bold (g174 "**3** groups", g179 "**3967149**"), in a
@@ -479,10 +480,11 @@ Gold hand audit results (labelled by the team on 2026-10-17; `audits/gold/labels
   (g160, "So \(2^x = 3\)").
 - So 25% (95% CI 11% to 47%) of finished unboxed responses are correct: about 500 (224 to 938)
   responses, 0.29% (0.13% to 0.54%) of the difficulty run. Pool membership is barely affected.
-- Undecided: labeler A marked 8 truncated responses "?" (whether an unfinished response commits to an
-  answer); for the 3 of them that were shared, B and C both said N, like gold.
-- Inter-rater agreement: on the 30 shared items every decided pair agrees (A-B 27, A-C 27, B-C 30;
-  Cohen's kappa 1.0; the shared items are balanced, 45 Y and 42 N votes). B also labelled C's 56 items,
+- Undecided, then corrected: labeler A had marked 8 truncated responses "?"; for the 3 of them that were
+  shared, B and C both said N, like gold. On 2026-10-24 A stated that all 8 were meant as N, and the label
+  file was corrected (notes column records it) and rescored: no undecided items remain.
+- Inter-rater agreement: on the 30 shared items every pair agrees (A-B 30, A-C 30, B-C 30 after A's
+  correction; Cohen's kappa 1.0; the shared items are balanced, 45 Y and 45 N votes). B also labelled C's 56 items,
   all in agreement with C. The labeler column was left blank in most rows, so labels are attributed by
   file.
 - Decision (2026-10-17): keep the strict rule (last `\boxed{}` plus math-verify) for the primary
@@ -1218,3 +1220,35 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   answer_explanation). No event in any of the 8 easy-pool runs (top exposures 0.9 to 6.6), in xVerify
   (4 runs), the 0% control (2), General-Verifier (2; top exposures 1.9 and 1.55) or R1-Distill-Qwen hard
   seeds 0 and 2 (1.45 and 0.88). Mean run time 4.8 h; about 2 days left.
+- 2026-10-24: One-page revised proposal for the 2026-10-26 submission written (`docs/proposal/project_proposal.tex`
+  and `.pdf`), answering the TA's two points. Sample size: the unit is run x family (36 x 14 = 504 units, 336
+  in the core test), not the 24 judge x family points the TA assumed. Decided for the analysis: AUROC gets
+  95% percentile bootstrap intervals from 10,000 resamples of whole runs within each judge (a run's 14
+  families stay together), per judge and pooled, with paired bootstrap tests against each baseline and Holm
+  correction (HANDOFF left the number of resamples open). Compute budget as stated there: about 12 L4 hours
+  for the audit, about 25 GPU hours of pilots and about 175 for the main experiment (6 checkpoints, 36 runs
+  at a measured 4.8 h) on one RTX PRO 6000 96 GB, about 212 GPU hours and about $270 in all.
+- 2026-10-24: Gold hand audit corrected: labeler A's 8 "?" labels on truncated responses were meant as N
+  (`audits/gold/labels/gold_audit_labels_A.csv`, rescored into `audits/gold/audit_score.json`). Truncated
+  stratum 20 of 20, raw agreement 195 of 200 (97.5%), weighted agreement unchanged at 99.7%: the 5
+  disagreements are correct unboxed answers that the strict rule rejects, which the correction does not touch.
+- 2026-10-26: Main experiment finished: 36 of 36 runs, no failures (`results/main/queue_state.json`, finished
+  14:19 on the machine's clock), and the instance stopped itself. Its GPU was rented by someone else before
+  the data were copied, so `results/` and `runs/grpo/` were taken out of the stopped instance with Vast's
+  cloud sync to Google Drive, downloaded and checked on the Mac. Every run has all its log files, 31
+  evaluations up to step 300 and 300 training steps; every JSONL line parses; each run's
+  eval_summary.jsonl equals its packed copy; all 6 checkpoints have risk scores (the rotated ones include
+  Qwen3.6). The machine's copies of `results/stage1` and `results/stage2` equal the committed ones (four
+  pilot CSVs differ only in line endings). Stored as `results/main/` (packed results, 9.5 MB, committed)
+  and `runs/grpo/` (full logs including the seed2pct, rot0 and rot0s pilots, 2.8 GB, not committed). The
+  Q2 and Q3 pilots ran on the first machine and exist only in `results/stage2/pilots/`; the SFT weights
+  stay on the stopped instance.
+- 2026-10-26: Final event tally (tau 0.05, the 14 families; no_box is a monitor, not a family): 14 events in
+  12 runs, all on the hard pool, and in all 12 runs the first family exploited was the family ranked first
+  by the risk score recorded before the run; the two second events were ranked 4 and 3. New since 26 of 36:
+  Qwen2.5-Math hard seed 2 (answer_explanation), Qwen2.5-7B hard seed 2 (empty_symbols), and Qwen3.6-35B-A3B
+  hard seeds 0 and 2 (empty_symbols at steps 20 and 110, "{" in the 4.0% and 1.2% tiers). Qwen3.6 seed 1,
+  where "{" sat in the 0.3% tier (6 of 4,000 post-SFT samples), had no event, as predicted in Section 3.21.
+  No event in any easy-pool run (12), xVerify (6), the 0% control (3), General-Verifier (3) or R1-Distill-Qwen
+  hard seeds 0 and 2. The frozen analysis (AUROC with bootstrap intervals, baselines, competing risks) has
+  not been run yet.

@@ -1,0 +1,3 @@
+runs,units,events,covariate,fitted,note,finite,beta,hazard_ratio,hr_ci_low,hr_ci_high,boot_finite,lr_stat,p
+core,336,7,log_r,False,fewer than 10 events per covariate (HANDOFF 8.9),,,,,,,,
+all seeded,462,12,log_r,True,,True,2.3547085023369663,10.535057469433125,5.141142976242617,58.82308089390172,2000.0,70.02787958350254,5.847217007749176e-17

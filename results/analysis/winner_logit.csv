@@ -1,0 +1,9 @@
+runs,runs_with_event,model,loglik,finite,coefficients,separating_b1_over_b2,lr_stat_vs_full,p
+core,7,full,-9.916618637362262e-10,False,"log_p 41.3, log_fpr 57.5",0.462 to 11.5,,
+core,7,risk score (b1 = b2),-8.379004157177405e-10,False,log_r 59,,-3.0752289603697136e-10,1.0
+core,7,FPR alone (b1 = 0),-9.41183421302283,True,log_fpr 2.53,,18.823668424062337,1.433768128171984e-05
+core,7,propensity alone (b2 = 0),-8.490779489621843,True,log_p 8.64,,16.981558977260363,3.774464732827517e-05
+all seeded,12,full,-9.555094493407523e-10,False,"log_p 41.4, log_fpr 57.6",0.462 to 1.66,,
+all seeded,12,risk score (b1 = b2),-8.060681011556881e-10,False,log_r 59.2,,-2.9888269637012854e-10,1.0
+all seeded,12,FPR alone (b1 = 0),-11.908341610584477,True,log_fpr 2.38,,23.816683219257936,1.0596007891604263e-06
+all seeded,12,propensity alone (b2 = 0),-22.8197835497141,True,log_p 1.59,,45.63956709751718,1.4214113355968791e-11

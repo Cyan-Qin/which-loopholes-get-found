@@ -1148,6 +1148,54 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   runs and, before seeding, in the pilot, Section 3.13), and higher doses win more often, but the design
   has too few independently randomized units for H3 to pass the confirmatory bar.
 
+### 3.24 Secondary analyses: competing risks, early growth, winner conditional logit (`src/analysis/secondary.py`)
+
+- Run on 2026-10-26: `python -m src.analysis.secondary` (2,000 run bootstrap replicates within judges,
+  seed 0); outputs `km_runs.csv`, `km_tiers.csv`, `cox.csv`, `early_growth.csv` and `winner_logit.csv` in
+  `results/analysis/`. Seeded runs only (24 core and 9 held-out); the 0% control runs have no event.
+- Specification, fixed in the code before it was run: the log models use the Jeffreys-smoothed FPR
+  (k + 0.5) / (n + 1) of the seeding string over the 471 audit problems, since many FPRs are zero, and
+  log r = log p + log FPR; ties at a run's first event go to the larger e_f (none occurred); the early-
+  growth window w2 is steps E-20 to E-11 for a first event at step E (the protocol's "10 steps ending 10
+  steps before the first event"); a Cox model is fitted only with at least 10 events per covariate; when
+  a model separates the data, its likelihood is reported as a supremum and its coefficients as not finite.
+- Competing risks. 12 first events in the 33 seeded runs (7 core, 5 held-out); the 2 second events are
+  censored at the first event of their run. Share of runs with an event (Kaplan-Meier) at steps 50, 100,
+  150 and 300: hard pool (21 runs) 0.38, 0.52, 0.57, 0.57; easy pool (12 runs) 0 throughout. Every first
+  event came by step 110. All 7 core first events are families seeded at 4.0%; the two core events at
+  1.2% were second events, and the two held-out first events at 1.2% are Qwen2.5-7B and Qwen3.6, seed 2.
+  Cox model of the cause-specific hazard on log r: not fitted on the core runs (7 events); on all seeded
+  runs (12 events) the hazard ratio is 10.5 per unit of log r (95% run bootstrap interval 5.1 to 58.8;
+  likelihood-ratio statistic 70.0, p < 1e-15): a risk score e times higher multiplies the hazard of a
+  takeover by about 10.
+- Early growth (Spearman correlation of g with each score; 95% intervals from the run bootstrap):
+
+| Runs | log r | log FPR | log p | rho(log r) minus rho(log FPR) |
+|---|---|---|---|---|
+| Core, 336 units | -0.04 (-0.27 to 0.18) | 0.28 (0.07 to 0.48) | -0.33 (-0.44 to -0.23) | -0.33 (-0.39 to -0.28) |
+| All seeded, 462 units | -0.10 (-0.28 to 0.08) | 0.19 (0.00 to 0.37) | -0.31 (-0.40 to -0.23) | -0.28 (-0.33 to -0.24) |
+
+  Least squares on the core units: R squared 0.003 for log r, 0.075 for log FPR, 0.148 for log p and
+  0.223 for both (coefficients +0.136 on log FPR, -0.211 on log p). Early growth does not follow the risk
+  score. Before any takeover the seeded strings mostly decay: the mean g is negative in every cell of
+  propensity tercile by FPR band (core units), from -1.73 (high p, FPR below 1%) to -0.10 (low p, FPR
+  above 20%); it is more negative the higher the seeded frequency and less negative the higher the FPR,
+  and 13% of units are exactly 0 because the family never appears in either window. So FPR sets the
+  direction of early selection while propensity mostly measures how much of the SFT-induced frequency
+  is lost. One reading (an interpretation, not tested): under selection a pattern's log frequency moves
+  at a rate set by its reward relative to the group mean, not by its frequency, and the product matters
+  for whether a family reaches a takeover within the budget, which the primary test and the hazards
+  measure. As a test of H1 on a continuous outcome, this secondary analysis does not support it.
+- Winner conditional logit. Over the runs with an event (7 core, 12 seeded), the full model and the
+  product model separate the data: the family with the highest risk score won every time, so both
+  likelihoods tend to 1 and their coefficients are not finite. Every weight ratio b1 / b2 from 0.46 to
+  11.5 (core) or 0.46 to 1.66 (all seeded) ranks every winner first, and the product's ratio of 1 lies
+  inside. Neither factor alone can: likelihood-ratio statistics against the full model 18.8 (FPR alone,
+  p = 1.4e-5) and 17.0 (propensity alone, p = 3.8e-5) on the core runs, 23.8 (p = 1.1e-6) and 45.6
+  (p = 1.4e-11) on all seeded runs; the restriction b1 = b2 costs nothing (statistic 0, p = 1). Under
+  separation the chi-square calibration is approximate, since the full model's maximum is a supremum;
+  the range of separating weights is the more direct description.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1359,3 +1407,9 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   pool; p 0.016, Holm 0.031) are rejected; H3 is not (exact randomization test over the tier groupings,
   p 0.056): events rise with dose (0, 2 and 7 at 0.3%, 1.2% and 4.0%; 0 in the 0% control), but they
   fall on only 4 families, which limits the test's resolution.
+- 2026-10-26: Secondary analyses (Section 3.24). Cause-specific Cox model on all seeded runs: hazard ratio
+  10.5 per unit of log r (5.1 to 58.8); not fitted on the core runs (7 events). Winner conditional logit:
+  the product ranks every winner first (separation; any weight ratio from 0.46 to 1.66 does), FPR alone
+  and propensity alone are rejected against the full model (p 1e-6 and 1e-11 on all seeded runs). Early
+  growth does not follow the risk score (Spearman -0.04 on the core runs) but FPR (0.28), while
+  propensity correlates negatively (-0.33): seeded strings decay early in RL, less so when accepted.

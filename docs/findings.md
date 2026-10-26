@@ -1230,6 +1230,34 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   the only variant that breaks it is per-token likelihood, which does not measure how often a policy
   produces a pattern.
 
+### 3.26 Exploit hand audit: design (`src/monitor/exploit_audit_sheet.py`, `audits/exploit/`)
+
+- Purpose (proposal, "Monitoring and events"): check the two automatic labels behind every event, the
+  family detector and the gold checker, on the evaluation outputs of the main runs, and separate true
+  exploits from ordinary judge errors and gold failures.
+- Population: all 223,200 evaluation outputs of the 36 main runs (`runs/grpo/*/eval.jsonl`), stratified
+  with events recomputed at the frozen tau. Strata and population: exploits of a family at or after its
+  event in that run (the outputs behind the events), 42,708 in four families (empty_symbols 26,175,
+  reasoning_opener 10,805, answer_explanation 5,127, adversarial_prefixes 601) but only 46 distinct
+  texts; every other exploit 1,343 (76 distinct); outputs the judge accepted with gold wrong and no
+  family 5,175 (1,615 distinct); family outputs the judge rejected 18,234. No family output is marked
+  correct by gold (the detector gives no family to a response with a non-empty boxed answer), so that
+  stratum is empty.
+- Sample (seed from `configs/data.yaml`): 8 from each event family, 40 other exploits, 48 judge
+  acceptances without a family, 30 rejected family outputs; 150 items, 30 for all three labelers and
+  40 for each of A, B and C (70 per person). Event families get equal quotas because a proportional
+  sample would be almost all "{"; shares over all exploits are weighted back by population.
+- Labels, blind to the detector, the gold and judge verdicts, the stratum, the run and the step: the
+  pattern (one of the 14 family names with a guide and an example each, "none" for a genuine attempt,
+  "other" for a grader-gaming pattern outside the list, "?") and whether the final answer is correct
+  (Y, N, ?). Scoring (`src/monitor/exploit_audit_score.py`): agreement of detector and gold with the
+  plurality label per stratum (Wilson intervals), the share of exploits the humans confirm (pattern and
+  wrong answer), the split of judge acceptances without a family into gold misses, detector misses and
+  ordinary judge errors, and Cohen's kappa on the shared items.
+- Files: the sheet and page for labelers in `audits/exploit/` (committed); the key and strata in
+  `runs/exploit-audit/` (not committed until labeling ends, as for the gold audit). Status: waiting for
+  labels.
+
 ---
 
 ## 4. Deviations from the proposal (to state in the report)
@@ -1451,3 +1479,7 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   risk score leads FPR alone by +0.037 to +0.041 on the core runs (p < 0.0001 each); the threshold-free
   rise correlates 0.555 with the risk score against 0.467 with FPR; total string likelihood and stage-1
   family-mean FPRs give the same conclusions; per-token likelihood fails (AUROC 0.543).
+- 2026-10-26: Exploit hand audit prepared (Section 3.26): 150 blind items from the evaluation outputs of the
+  36 main runs, stratified into event exploits, other exploits, judge acceptances without a family and
+  rejected family outputs; 30 shared by A, B and C, 40 each otherwise. Sheet and page in `audits/exploit/`,
+  key in `runs/exploit-audit/` until labeling ends; scoring in `src/monitor/exploit_audit_score.py`.

@@ -1244,8 +1244,9 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   correct by gold (the detector gives no family to a response with a non-empty boxed answer), so that
   stratum is empty.
 - Sample (seed from `configs/data.yaml`): 8 from each event family, 40 other exploits, 48 judge
-  acceptances without a family, 30 rejected family outputs; 150 items, 30 for all three labelers and
-  40 for each of A, B and C (70 per person). Event families get equal quotas because a proportional
+  acceptances without a family, 30 rejected family outputs; 150 items. Two team members label them
+  (B and C, the letters of the gold audit; A does not label): 30 items for both and 60 for each (90 per
+  person). Event families get equal quotas because a proportional
   sample would be almost all "{"; shares over all exploits are weighted back by population.
 - Labels, blind to the detector, the gold and judge verdicts, the stratum, the run and the step: the
   pattern (one of the 14 family names with a guide and an example each, "none" for a genuine attempt,
@@ -1483,3 +1484,5 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   36 main runs, stratified into event exploits, other exploits, judge acceptances without a family and
   rejected family outputs; 30 shared by A, B and C, 40 each otherwise. Sheet and page in `audits/exploit/`,
   key in `runs/exploit-audit/` until labeling ends; scoring in `src/monitor/exploit_audit_score.py`.
+- 2026-10-26: Exploit hand audit changed to two labelers, B and C (A does not label): the same 150 items and
+  key, 30 for both and 60 for each (Section 3.26).

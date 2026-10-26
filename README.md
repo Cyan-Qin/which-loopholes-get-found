@@ -273,7 +273,7 @@ controlled seeding. Events are few (14 in 12 runs), held-out judges are three, t
 
 ## References
 
-1. Huang et al. 2025. From Accuracy to Robustness (first titled Pitfalls of Rule- and Model-based
-   Verifiers). arXiv:2505.22203.
+1. Huang et al. 2025. From Accuracy to Robustness: A Study of Rule- and Model-based Verifiers in
+   Mathematical Reasoning. arXiv:2505.22203.
 2. Zhao et al. 2025. One Token to Fool LLM-as-a-Judge. arXiv:2507.08794.
 3. Shao et al. 2024. DeepSeekMath. arXiv:2402.03300.

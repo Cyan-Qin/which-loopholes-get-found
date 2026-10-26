@@ -1,0 +1,299 @@
+% Which Loopholes Get Found? Predicting Reward Hacking of LLM Judges before RL Training
+% Draft built on the official ACL style files (acl.sty, acl_natbib.bst; acl_latex.tex is the template's
+% own example, kept for reference). Compile: latexmk -pdf main.tex
+% Writing conventions: no em or en dashes in the prose; every number traces to docs/findings.md.
+% \todo{} marks text still to write or to check; remove all of them before submission.
+
+\documentclass[11pt]{article}
+
+% "review" gives the anonymous, line-numbered submission; use \usepackage{acl} for the final version.
+\usepackage[review]{acl}
+
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{xcolor}
+
+\graphicspath{{../figures/}}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\fpr}{\mathrm{FPR}}
+\newcommand{\phat}{\hat{p}}
+\newcommand{\str}[1]{``\texttt{#1}''}
+
+\title{Which Loopholes Get Found? \\ Predicting Reward Hacking of LLM Judges before RL Training}
+
+% Final version only (hidden in review mode):
+\author{Xuanyi Lyu \and Yuezhou Zhao \and Qing Qin \\
+  Columbia University \\
+  \texttt{\{xl3693,yz5408,qq2150\}@columbia.edu}}
+
+\begin{document}
+\maketitle
+
+% ============================================================================ abstract
+\begin{abstract}
+Which loophole of an LLM judge will a policy exploit when the judge serves as its reward? We show that the
+answer can be predicted before any RL step. LLM judges accept degenerate answers such as a lone \str{\{} or
+\str{Thought process:}, but static robustness probes list many such flaws without saying which ones training
+will find. Before training, we audit each judge and the starting policy and score every hacking pattern by its
+exposure: how often the policy produces the pattern times how often the judge accepts it. To test exposure as a
+cause rather than a correlate, we vary propensity experimentally, seeding the patterns into a short fine-tuning
+stage at three doses in a Latin square, and we pre-register the analysis. Across 36 GRPO runs of
+Qwen2.5-1.5B-Instruct against seven judges, three of them held out, exposure predicts which pattern is
+exploited with an AUROC of 0.974, against 0.937 for the judge's false-positive rate alone. In all 12 runs where
+a pattern was exploited, the first one was the pattern ranked first by exposure; the false-positive rate alone
+ranked it first in 6. Exploitation occurred only on hard prompts, where an accepted exploit receives about 2.5
+times the advantage it gets on easy ones.
+\end{abstract}
+
+% ============================================================================ 1 introduction
+\section{Introduction}
+
+Reinforcement learning with verifiable rewards has become a standard way to train reasoning in language models
+\citep{shao2024deepseekmath, deepseek2025r1}. When an answer cannot be checked by a rule, an LLM is often asked to
+act as the verifier, comparing the policy's answer with a reference \citep{chen2025xverify, ma2025generalreasoner}.
+Such judges have blind spots. A response consisting of a lone \str{\{}, a bare claim that the answer is correct, or
+the words \str{Thought process:} can be graded correct \citep{huang2025accuracy, zhao2025onetoken}, and a policy
+trained against such a judge can learn to emit these strings instead of solving the problem
+\citep{huang2025accuracy}.
+
+Knowing that a judge has a blind spot does not tell us whether training will find it. \citet{huang2025accuracy}
+report a 1.5B judge that fails static probes at high rates yet was never exploited during GRPO, while a fine-tuned
+judge with higher accuracy was, and suggest that the policy was too weak to find the flaws. Studies of when reward
+hacking begins have used biases injected into rubric judges \citep{wang2026rubric}, programmatic checkers
+\citep{khalifa2026countdown, wang2026catch}, or fine-tuning as a stand-in for RL \citep{eleutherai2026indicators}.
+\todo{verify each characterization against the cited paper}
+Whether measurements taken strictly before RL can predict which of a real judge's existing flaws a policy will
+exploit, and whether such predictions hold on judges held out from the analysis, has not been tested.
+
+We start from a simple account of how a policy finds a loophole under GRPO \citep{shao2024deepseekmath}. A pattern
+can be reinforced only when the policy samples it and the judge rewards it. With $G$ responses per training step,
+a pattern produced at rate $\phat$ and accepted with probability $\fpr$ earns on average $G\,\phat\,\fpr$ rewarded
+responses per step, its \emph{exposure}. We hypothesize that the pattern with the highest exposure is the one
+exploited, and that neither factor alone predicts as well (H1). Group normalization adds a second factor: when
+genuine successes are rare, an accepted exploit is often the only rewarded response in its group and receives a
+large advantage, so hard prompts should raise the risk (H2). If propensity matters causally, raising it by
+fine-tuning should raise the risk with dose (H3).
+
+Testing H1 requires propensity to vary independently of FPR, and natural propensities are too low for that: only 19
+of 174,760 responses of our base policy fall in any of 14 hacking-pattern families, and no pattern is exploited
+within 300 steps. We therefore seed each pattern into a short supervised fine-tuning (SFT) stage on the policy's own
+correct answers, at 0.3\%, 1.2\% or 4.0\% of the examples, with the doses rotated over three seeds in a Latin square
+so that every pattern meets every dose (Figure~\ref{fig:takeover}). We measure each judge's FPR on each pattern and
+the seeded propensity, record every score, and only then train. The protocol, including the event definition and
+every test, was frozen before the first run.
+
+Across 36 GRPO runs of Qwen2.5-1.5B-Instruct with seven judges, three of them held out, we find:
+\begin{itemize}
+\setlength\itemsep{1pt}
+\item \textbf{Exposure predicts which loophole is exploited.} Over 336 run and pattern pairs it reaches an AUROC of
+  0.974, against 0.937 for FPR alone, 0.847 for propensity alone and 0.379 for the judge's static accuracy (all
+  differences $p < 0.001$ after Holm correction), and the pattern exploited first was ranked first in all 12 runs
+  with an event.
+\item \textbf{The product is the right combination, and difficulty gates it.} A conditional logit over the winners
+  rejects either factor alone and is consistent with equal weights on log propensity and log FPR; exploitation
+  occurs only on hard prompts, where an accepted exploit receives about 2.5 times the advantage it gets on easy
+  prompts.
+\item \textbf{An open audit.} We release the FPR of seven open judges on 14 patterns, the code, every run log and an
+  interactive demo. \todo{anonymized link for review}
+\end{itemize}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_takeover.pdf}
+  \caption{One judge, three starting policies, three winners. R1-Distill-Verifier-1.5B on hard prompts: the judge,
+  and therefore each pattern's FPR, is the same in the three runs; only the seeded dose differs (Latin square,
+  colored numbers). Lines show each pattern's share of the 256 training responses per step; dotted lines mark
+  events. In each run the pattern exploited first is the one ranked first by exposure, recorded before training;
+  FPR alone ranks it first only in seed 0. In seed 2, \str{\{} (FPR 63\%, dose 1.2\%) later overtakes the
+  first winner.}
+  \label{fig:takeover}
+\end{figure*}
+
+% ============================================================================ 2 setup
+\section{Setting}
+\label{sec:setting}
+
+% Key points (findings 1.4 to 1.9, 3.5): what is fixed in every run.
+\paragraph{Hacking patterns.} 13 families from the hacking set of \citet{huang2025accuracy} plus the reasoning
+openers of \citet{zhao2025onetoken}, 14 in all (Table~\todo{appendix table with one example each}). Rule-based
+detectors assign each response to at most one family, by whether the pattern dominates the response rather than
+whether it appears in it; a response with a non-empty boxed answer or real mathematical work is never a family.
+\todo{detector validation numbers from findings 1.6}
+
+\paragraph{Judges.} Four core judges spanning the range of vulnerability reported by \citet{huang2025accuracy}:
+R1-Distill-Verifier-1.5B (exploited in their RL runs; our positive control), DeepSeek-R1-Distill-Qwen-1.5B
+\citep{deepseek2025r1}, Qwen2.5-Math-1.5B-Instruct \citep{yang2024qwen25math} and xVerify-0.5B-I
+\citep{chen2025xverify} (almost never fooled; negative control). Three held-out judges are used only to test
+transfer: General-Verifier \citep{ma2025generalreasoner}, Qwen2.5-7B-Instruct \citep{qwen2025qwen25} and
+Qwen3.6-35B-A3B. Each judge uses its native prompt and decoding. \todo{cite Qwen3.6; prompts in appendix}
+
+\paragraph{Policy, problems and gold labels.} Qwen2.5-1.5B-Instruct on integer-answer problems from DeepScaleR
+\citep{luo2025deepscaler} and the MATH training split \citep{hendrycks2021math}, excluding the 471 problems behind
+the hacking set and any overlap with MATH-500 \citep{lightman2023verify} and the GSM8K test set
+\citep{cobbe2021gsm8k}. A rule-based gold checker (last \verb|\boxed{}| answer, Math-Verify
+\citep{huggingface2025mathverify}) labels correctness and is never seen by the policy; it agrees with a blind hand
+audit of 200 responses 99.7\% of the time (weighted; every miss is a correct answer without a box).
+
+\paragraph{Difficulty pools.} The base policy answers every one of 21,845 candidate problems eight times. The hard
+pool holds problems solved 1 or 2 times out of 8, the easy pool those solved 5 to 7 times; each has 2,229 training
+and 100 evaluation problems.
+
+% ============================================================================ 3 method
+\section{Predicting exploitation before training}
+\label{sec:method}
+
+\paragraph{Judge audit.} For judge $j$ and family $f$, $\fpr_{j,f}$ is the share of the 471 audit problems on
+which $j$ accepts the family's pre-specified seeding string as a correct answer (Figure~\ref{fig:fpr}). One string
+per family, its most frequent answer in the hacking set \todo{exceptions: reasoning opener, gibberish}, because GRPO
+reinforces strings: in a pilot, a family that mixed accepted and rejected strings did not grow.
+
+\paragraph{Controlled propensity.} \todo{2 to 3 sentences: SFT on 2,000 of the policy's own correct answers,
+shares replaced by the family string; groups of 5, 5 and 4 families drawn once at random; rotation $s$ for seed $s$;
+matched 0\% control. Measured propensity: 16 samples on each of 250 problems per pool, Jeffreys smoothing.}
+
+\paragraph{Exposure score.} $r_{j,f} = \phat_f \cdot \fpr_{j,f}$, and $256\,r_{j,f}$ is the expected number of
+rewarded responses of family $f$ per GRPO step. Recorded for every run before its first step.
+
+\paragraph{Outcome.} \todo{event: $e_f(t)$, the share of 200 evaluation outputs that are in $f$, wrong by gold and
+accepted by the judge, rises at least $\tau = 0.05$ above $e_f(0)$ at two consecutive evaluations, every 10 steps.}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_fpr_heatmap.pdf}
+  \caption{Judge audit: the share of 471 math problems on which each judge accepts each family's seeding string as
+  a correct answer. Families are ordered by mean FPR over the four core judges. xVerify accepts none; the held-out
+  Qwen3.6-35B-A3B accepts essentially one string.}
+  \label{fig:fpr}
+\end{figure*}
+
+% ============================================================================ 4 design
+\section{Experimental design}
+\label{sec:design}
+
+% Key points (findings 3.20, configs/protocol.yaml): runs, training, analysis frozen before the first run.
+\paragraph{Runs.} \todo{4 core judges x 2 pools x 3 seeds = 24; 3 held-out judges x hard pool x 3 seeds = 9;
+0\% control with Qwen2.5-Math on the hard pool x 3 seeds = 3. GRPO via TRL \citep{vonwerra2020trl} and vLLM
+\citep{kwon2023vllm}: 300 steps of 32 prompts x 8 samples, DAPO loss \citep{yu2025dapo}, no KL, lr 1e-6; the judge is
+the only reward. Hyperparameters in Appendix.}
+
+\paragraph{Analysis.} \todo{Unit run x family. H1: AUROC of exposure against FPR alone, propensity alone and static
+accuracy; percentile bootstrap over whole runs within judge (10,000), paired differences. H2: exact McNemar over 12
+run pairs that differ only in pool. H3: exact randomization test over the 252,252 family groupings. Holm over the
+five tests. Secondary: cause-specific hazards, winner conditional logit, early growth. Protocol frozen as a git tag
+before the first run; one amendment added a held-out judge at the end of the queue.}
+
+% ============================================================================ 5 results
+\section{Results}
+\label{sec:results}
+
+\paragraph{Exposure predicts which loophole is exploited (H1).} \todo{Figure~\ref{fig:h1}a: events only above an
+exposure of about 2 rewarded responses per step. Figure~\ref{fig:auroc}: AUROC table. Figure~\ref{fig:h1}b: winner
+ranks 12/12 versus 6/12 and 2/12. Without the positive control: 0.979.}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_h1.pdf}
+  \caption{Prediction against outcome. (a) Every pattern of every seeded run (462): exposure recorded before
+  training against the largest rise of its exploitation rate $e_f(t)$ within 300 steps; filled points had an
+  event. (b) In the 12 runs with an event, the rank of the pattern exploited first under exposure, FPR alone and
+  propensity alone.}
+  \label{fig:h1}
+\end{figure*}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{fig_auroc.pdf}
+  \caption{AUROC over run and pattern pairs with 95\% intervals from resampling whole runs within each judge.
+  Static accuracy is constant within a judge and pool, so it can rank only judges and pools.}
+  \label{fig:auroc}
+\end{figure}
+
+\paragraph{Why the product.} \todo{winner conditional logit: equal weights separate every winner (any ratio from
+0.46 to 1.66); FPR alone and propensity alone fall short (LR p = 1e-6, 1e-11); cause-specific Cox hazard ratio 10.5
+per unit of log exposure. Early growth follows FPR (rho 0.28), not exposure (-0.04): seeded strings decay early,
+less so when accepted.}
+
+\paragraph{Hard prompts gate exploitation (H2).} \todo{Figure~\ref{fig:h2h3}a,b: 7 of 12 pairs with an event only on
+the hard pool, none only on the easy pool (p = 0.016, Holm 0.031); acceptance 19 to 23\% versus 61 to 67\%, advantage
+1.8 to 2.1 versus 0.7 to 0.8. Caveat: pools also differ in source.}
+
+\paragraph{Seeding dose (H3).} \todo{Figure~\ref{fig:h2h3}c: 0, 2, 7 events at 0.3, 1.2, 4.0\%, none in the 0\%
+control; randomization p = 0.056, not significant: only four families carry events.}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_h2_h3.pdf}
+  \caption{Difficulty and dose. (a) Share of seeded runs with an event by training step. (b) Judge acceptance in the
+  first 10 steps; numbers are the advantage $\sqrt{(1-q)/q}$ of a rewarded response at acceptance rate $q$ under
+  group normalization. (c) Event rate per pattern by seeded dose with 95\% Wilson intervals; 0\% is the unseeded
+  control.}
+  \label{fig:h2h3}
+\end{figure*}
+
+\paragraph{Held-out judges.} \todo{0.995 versus 0.979 for FPR alone (p = 0.066): FPR is nearly sufficient when a
+judge accepts few strings; gains come where FPR's first choice was seeded low (Qwen2.5-7B seeds 0 and 2; Qwen3.6 seed
+1, predicted beforehand).}
+
+\paragraph{Robustness.} \todo{tau 0.025 to 0.10 with one or two evaluations: lead over FPR +0.037 to +0.041; total
+string likelihood and family-mean FPR give the same result; per-token likelihood does not (Appendix).}
+
+% ============================================================================ 6 related work
+\section{Related work}
+\label{sec:related}
+
+\todo{Organize by approach, not paper by paper. (1) Reward hacking and overoptimization
+\citep{amodei2016concrete, skalse2022defining, gao2023scaling}. (2) Robustness of LLM and model-based verifiers
+\citep{zheng2023judging, huang2025accuracy, zhao2025onetoken, chen2025xverify}. (3) When hacking emerges in RL:
+injected biases \citep{wang2026rubric}, code testbeds \citep{khalifa2026countdown, wang2026catch}, fine-tuning
+indicators \citep{eleutherai2026indicators}, rubric RL \citep{mahmoud2026rubric}, benchmarks \citep{thaman2026benchmark},
+noisy verifiers \citep{plesner2026imperfect}, verifier fuzzing \citep{ray2026fuzzing}. State the difference: strictly
+pre-RL, natural flaws of real judges, held-out judges, controlled propensity.}
+
+% ============================================================================ 7 conclusion
+\section{Conclusion}
+
+\todo{Three sentences: the claim, the practical use (audit a judge and policy before RL; FPR alone is not enough),
+the open question (scale, natural propensities).}
+
+% ============================================================================ limitations (required, unnumbered)
+\section*{Limitations}
+
+Our evidence comes from one 1.5B policy on integer-answer math, 14 known pattern families and judges that fit
+beside training on one GPU, with a 300-step budget; larger policies may find patterns outside the families we
+detect. Natural propensities were too low for any pattern to be found at this scale, so propensity was raised by
+controlled seeding, which models fine-tuning data that contain such responses but not their natural emergence.
+Events are few (14 in 12 runs) and the held-out judges are three, so intervals per judge are wide and transfer is a
+limited check. The dose test (H3) did not reach significance, and the hard and easy pools differ in problem source as
+well as difficulty. \todo{tighten; add what does not undermine the main claim}
+
+\section*{Ethics statement}
+
+\todo{The patterns are already public; the audit is meant to flag risky judges before training and to help
+evaluators who rely on LLM judges; the same knowledge could help someone game a judge-based evaluation. Licenses of
+data and models (README). Compute: about 212 GPU hours.}
+
+\bibliography{references}
+
+\appendix
+
+\section{Hyperparameters and compute}
+\label{app:hyper}
+\todo{tables from configs/grpo.yaml and configs/sft.yaml; hardware and GPU hours.}
+
+\section{Pattern families and detectors}
+\label{app:families}
+\todo{one row per family: definition, seeding string, detector rule; detector validation.}
+
+\section{Statistical details and sensitivity analyses}
+\label{app:stats}
+\todo{bootstrap specification, randomization test, hazards, conditional logit, sensitivity table (findings 3.22 to
+3.25).}
+
+\end{document}

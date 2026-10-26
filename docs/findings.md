@@ -1523,3 +1523,12 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   seeding-string FPR heatmap of the 7 judges, exposure against the largest rise of e_f for all 462 seeded
   units with the winner's rank under each score, the AUROC forest plot, and difficulty and dose (time to
   the first event by pool, early acceptance and advantage, event rate by seeded share).
+- 2026-10-26: Paper started in `paper/` on the official ACL style files (`acl.sty`, review mode; A4 with a 16 cm
+  text width and 7.7 cm columns, matching the figures). `main.tex` has the abstract and introduction drafted,
+  every other section outlined with its numbers, and the five figures placed; it compiles to 7 pages. The
+  framing: which loophole a policy exploits is predictable before RL from exposure, propensity times FPR.
+  `paper/references.bib`: 24 papers whose arXiv ids were checked against the arXiv API (titles and authors
+  match) with BibTeX fetched from arXiv, plus TRL, DeepScaleR and Math-Verify from their own citation blocks
+  and the EleutherAI repository. That repository is titled "Leading Indicators of Reward Hacking", not "Early
+  Indicators" as noted in HANDOFF section 11; its blog post is still to be verified. The README now gives the
+  full title of Huang et al., confirmed by the arXiv API.

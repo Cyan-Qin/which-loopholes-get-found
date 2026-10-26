@@ -369,6 +369,7 @@ Built after pilot Q3 (Section 3.13) to give every family enough exposure; tested
 | Labeled sheets came back altered: a few invalid UTF-8 bytes in the CSVs, changed response text in the xlsx | spreadsheet apps rewrote the policy's odd characters | only audit_id and the labels are read from the returned files (`audits/gold/labels/`); response text comes from the committed sheet |
 | After the automatic stop, the Vast instance could not restart ("Scheduling": its GPU was rented by someone else) | a stopped Vast instance keeps its disk but not its GPU | copy the run directories to a new instance with Vast's copy function, then destroy the old one; during the campaign keep the instance running, and back results up before any stop |
 | Answer key of the hand audit was on the stopped GPU machine | the sheet was built there | `src/gold/rebuild_key.py` recomputes it from the sheet (gold is deterministic; truncation is exactly 1536 tokens); strata counts match the sample |
+| `python -m src.data.download_hacking --help` (and `build_pool`) ran the module and rewrote `data/` | the two modules had no argument parser | argparse added; the rebuilt files were checked: 21,845 candidates, all 4,658 pool ids present, answers equal to the run records, all tests pass |
 
 ---
 
@@ -1446,12 +1447,11 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   answer_explanation). No event in any of the 8 easy-pool runs (top exposures 0.9 to 6.6), in xVerify
   (4 runs), the 0% control (2), General-Verifier (2; top exposures 1.9 and 1.55) or R1-Distill-Qwen hard
   seeds 0 and 2 (1.45 and 0.88). Mean run time 4.8 h; about 2 days left.
-- 2026-10-24: One-page revised proposal for the 2026-10-26 submission written (`docs/proposal/project_proposal.tex`
-  and `.pdf`), answering the TA's two points. Sample size: the unit is run x family (36 x 14 = 504 units, 336
-  in the core test), not the 24 judge x family points the TA assumed. Decided for the analysis: AUROC gets
+- 2026-10-24: Sample size and compute reviewed. The unit of analysis is run x family (36 x 14 = 504 units, 336
+  in the core test), not judge x family, which would give only 24 points. Decided for the analysis: AUROC gets
   95% percentile bootstrap intervals from 10,000 resamples of whole runs within each judge (a run's 14
   families stay together), per judge and pooled, with paired bootstrap tests against each baseline and Holm
-  correction (HANDOFF left the number of resamples open). Compute budget as stated there: about 12 L4 hours
+  correction (HANDOFF left the number of resamples open). Compute budget: about 12 L4 hours
   for the audit, about 25 GPU hours of pilots and about 175 for the main experiment (6 checkpoints, 36 runs
   at a measured 4.8 h) on one RTX PRO 6000 96 GB, about 212 GPU hours and about $270 in all.
 - 2026-10-24: Gold hand audit corrected: labeler A's 8 "?" labels on truncated responses were meant as N
@@ -1505,3 +1505,14 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   key, 30 for both and 60 for each (Section 3.26).
 - 2026-10-26: Demo built (Section 3.27): `src/demo/build_data.py` writes a 3.8 MB bundle to `demo/data/`, and
   `demo/app.py` (Gradio 6.29.1) shows the pre-RL audit, a replay of each run and the headline results.
+- 2026-10-26: README written (project summary, main results, repository structure, reproduction steps with
+  commands and compute, demo, troubleshooting from Section 2). While checking its commands, `--help` ran
+  `src.data.download_hacking` and `src.data.build_pool`, which rewrote the hacking parquet and the
+  candidate pool in `data/` (not tracked); the rebuild is equivalent (21,845 candidates, uids are content
+  hashes and all 4,658 pool ids are present, all 6,200 references of a main run's evaluations match, all
+  tests pass). Both modules now parse arguments, so `--help` only prints the usage.
+- 2026-10-26: README rewritten as the repository of the paper: experimental details (hyperparameters, seeds,
+  statistics), compute, released artifacts, licenses of every dataset and model from their Hugging Face
+  cards (xVerify-0.5B-I is CC BY-NC-ND 4.0, used for inference only; MATH-500 states none), intended use,
+  risks and limitations, and a citation entry. The code is released under the MIT License (`LICENSE`,
+  copyright the three authors).

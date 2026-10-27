@@ -674,6 +674,12 @@ stage 1. The lead of
 exposure over FPR alone stays between 0.037 and 0.041 except for per-token likelihood, which favors short repetitive
 strings and is not a frequency. None of these variants enters the Holm family.
 
+% The left column is full when this table comes, so \clearpage at the end puts it on a float column, which
+% LaTeX centres vertically; float columns from here on start at the top instead.
+\makeatletter
+\setlength{\@fptop}{0pt}
+\setlength{\@fpbot}{0pt plus 1fil}
+\makeatother
 \begin{table}[h]
   \centering
   \footnotesize

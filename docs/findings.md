@@ -1673,3 +1673,8 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   q = 5/8 and advantage 0.77, and states the measured 1.8 to 2.1 against 0.7 to 0.8 beside them. The Gemini script,
   its prompt and the three attempts are removed. The main text ends on page 7 (Conclusion) and the PDFs build
   without overfull boxes.
+- 2026-10-26: Table 5 on the last page sat in the middle of the right column with empty space above it. The left
+  column is full when the table comes, so `\clearpage` at the end of the document puts it on a float column, and
+  LaTeX centres float columns vertically (`\@fptop` and `\@fpbot` both 0pt plus 1fil). From just before the table,
+  `\@fptop` is 0pt, so float columns start at the top; nothing before it changes. Both PDFs rebuilt, 12 pages, no
+  overfull boxes.

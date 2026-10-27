@@ -1630,3 +1630,46 @@ deviation from protocol-v1 and has to be decided before the queue reaches the he
   list of core judges in Setting; the three semicolons separate that list's items, which contain commas. No number or
   claim changed. The convention is noted in the header comment of main.tex. Both PDFs rebuilt (main text ends on
   page 7, no overfull boxes).
+- 2026-10-26: Three layout and wording fixes in the paper. Each judge prompt of Appendix C is boxed with its heading
+  in a minipage, so a column break no longer splits the box of Huang et al. with the question or leaves the xVerify
+  heading alone at the bottom of a column; from there to the end of the appendix the columns are ragged at the bottom
+  (`\raggedbottom`), since acl.sty's `\flushbottom` spread the leftover space between the unbreakable boxes. Appendix C
+  no longer says when Qwen3.6 joined the held-out set (the paper now states only that its scores were computed from
+  the saved propensities before its runs; the decision itself is recorded in Section 3.21). The red link TODO in the
+  contributions is replaced by the public repository through a `\repourl` macro in the preamble, whose comment says
+  to swap in an anonymized mirror for ACL review, since the URL names an author; until then the review PDF shows the
+  public URL too. Both PDFs rebuilt, no overfull boxes.
+- 2026-10-26: Figures revised after an outside review. Figure 3a (now Figure 4a, `figures/gen_fig_h1.py`) marks the
+  lowest exposure of any event (1.92, read from the data and labeled as such) with a dashed line and splits the 10
+  hard-pool families above it without an event into the 9 that lost to a higher-exposure family with an event in
+  the same run (triangles) and the top family of a General-Verifier run without any event (diamond, 2.74); points
+  with an exposure of 1 or more are no longer jittered, so none crosses the line. Figure 1
+  (`figures/gen_fig_takeover.py`): the system-prompt mimicry color is darkened to #A86A00 for contrast, each dose
+  is labeled with a short form of its string, and a thin grey line shows the gold accuracy of the evaluation
+  outputs (results/main/<run>/eval_summary.jsonl), which is 0.10 to 0.15 at step 0 and 0.0 at every evaluation
+  once a pattern has taken over (seed 0 from step 70, seed 1 from step 50, seed 2 from step 140). Figure 5b (now 6b,
+  `figures/gen_fig_h2_h3.py`) overlays the step-0 evaluation acceptance on DeepScaleR problems alone (Section
+  3.28) as diamonds; the legend names their source, since the bars are training acceptance over steps 0 to 9.
+  New Figure 2, a method overview: first drawn with matplotlib, then replaced at the authors' request by a Gemini
+  drawing (`gemini-3-pro-image`, aspect 21:9, 2K; three attempts, attempt 2 chosen because every label and arrow
+  matches the prompt, attempt 1 added unrequested card numbers and attempt 3 colored only part of a header). The
+  prompt is the record in `figures/gen_fig_overview.py`; the attempts stay out of git. The score is shown as
+  recorded, not used in training, so the drawing has no arrow from the prediction to the GRPO run. The figure is
+  referenced at the end of the introduction and placed there, which keeps Section 3 from starting in the right
+  column of page 3 with stretched gaps on the left. The main text still ends on page 7 and the PDFs build without
+  overfull boxes.
+- 2026-10-26: Figure 2 redrawn in TikZ (`figures/fig_overview.tex`, built by `python -m figures.gen_fig_overview`,
+  now part of `figures.make_all`), replacing the Gemini drawing, whose accent strips, generic icons and sans-serif
+  type read as a slide deck. The TikZ source uses the paper's own fonts (times.sty, the standard math fonts,
+  Inconsolata), thin frames in the Okabe-Ito accents, and is drawn at its printed width of 16 cm; its PDF has no
+  creation date, so an unchanged source rebuilds byte for byte. In place of icons it shows the mechanisms: the
+  audit of one string ("{" x 471 problems, judge j, FPR, with 63% for "{" under R1-Distill-Verifier); the 3 x 3
+  Latin square of doses (groups A, B, C of 5, 5 and 4 families at 0.3/1.2/4.0, 1.2/4.0/0.3 and 4.0/0.3/1.2% over
+  seeds 0, 1, 2, from `tier_shares`); the exposure formula, with "every observed event had >= 1.92" in grey as an
+  observation, not a threshold; two example groups of 8 rewards for the difficulty gate; and the visible reward
+  loop against the dashed hidden monitor. The example groups proposed in the review did not match the paper's
+  formula sqrt((1 - q) / q): (0,0,0,0,0,0,0,1) gives 2.65, not 2.0, and (1,1,1,1,1,0,0,1) gives 0.58, not 0.75.
+  The figure uses one accepted exploit in a hard group, q = 1/8 and advantage 2.6, against an easy group with
+  q = 5/8 and advantage 0.77, and states the measured 1.8 to 2.1 against 0.7 to 0.8 beside them. The Gemini script,
+  its prompt and the three attempts are removed. The main text ends on page 7 (Conclusion) and the PDFs build
+  without overfull boxes.

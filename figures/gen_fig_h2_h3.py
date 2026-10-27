@@ -3,7 +3,10 @@
 (a) Share of seeded runs with an event by training step, hard pool (21 runs) against easy pool (12 runs).
 (b) The mechanism behind H2: mean judge acceptance over the first 10 training steps for the core judges;
     the number above each bar is the advantage sqrt((1 - q) / q) that a rewarded response receives under
-    group normalization at that acceptance rate q.
+    group normalization at that acceptance rate q. The diamonds are the acceptance of the step-0 evaluation
+    outputs on the DeepScaleR problems alone (results/analysis/acceptance_by_source.csv, from
+    src.analysis.descriptive), which make up 85% of the hard pool and 40% of the easy pool: the hard-easy
+    gap stays when problem source is held fixed.
 (c) Events per family and run in the core runs by seeded dose, with 95% Wilson intervals; the 0% level is
     the clean-SFT control (Qwen2.5-Math, hard pool). p is the exact randomization test of the seeding design.
 """
@@ -50,6 +53,7 @@ def main():
     ax.set_title("(a) time to the first event", loc="left")
 
     acc = pd.read_csv(ANALYSIS / "h2_acceptance.csv").set_index(["judge", "pool"])
+    ds = pd.read_csv(ANALYSIS / "acceptance_by_source.csv").query("source == 'deepscaler'").set_index(["judge", "pool"])
     x = np.arange(len(CORE))
     for k, pool in enumerate(("hard", "easy")):
         vals = [acc.loc[(j, pool), "accept"] for j in CORE]
@@ -58,10 +62,16 @@ def main():
         for b, a in zip(bars, adv):
             bx.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.015, f"{a:.1f}", ha="center", va="bottom",
                     fontsize=6.2)
+        bx.scatter(x + (k - 0.5) * 0.38, [ds.loc[(j, pool), "accept"] for j in CORE], marker="D", s=11,
+                   facecolors="white", edgecolors="black", linewidths=0.6, zorder=3,
+                   label="DeepScaleR only (step-0 eval.)" if k == 0 else None)
     bx.set_xticks(x, [SHORT[j] for j in CORE], fontsize=6.8)
-    bx.set_ylim(0, 0.9)
+    bx.set_ylim(0, 1.12)                    # room for the legend above the easy-pool labels
+    bx.set_yticks(np.arange(0, 1.01, 0.2))
     bx.set_ylabel("judge acceptance (steps 0 to 9)")
-    bx.legend(loc="upper left", ncol=2, columnspacing=0.8)
+    handles, labels = bx.get_legend_handles_labels()
+    order = [labels.index(f"{pool} pool") for pool in ("hard", "easy")] + [labels.index("DeepScaleR only (step-0 eval.)")]
+    bx.legend([handles[i] for i in order], [labels[i] for i in order], loc="upper left", handletextpad=0.4)
     bx.grid(axis="x", visible=False)
     bx.set_title("(b) acceptance and advantage", loc="left")
 

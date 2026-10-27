@@ -35,6 +35,9 @@
 \newcommand{\fpr}{\mathrm{FPR}}
 \newcommand{\phat}{\hat{p}}
 \newcommand{\str}[1]{``\texttt{#1}''}
+% Code and data link. The repository URL names an author, so for anonymous ACL review replace it with an anonymized
+% mirror, for example \newcommand{\repourl}{\url{https://anonymous.4open.science/r/<id>}}.
+\newcommand{\repourl}{\url{https://github.com/justLxy/which-loopholes-get-found}}
 
 \title{Which Loopholes Get Found? \\ Predicting Reward Hacking of LLM Judges before RL Training}
 
@@ -70,9 +73,10 @@ times the advantage it gets on easy ones.
   \includegraphics[width=\textwidth]{fig_takeover.pdf}
   \caption{One judge, three starting policies, three winners. In these runs of R1-Distill-Verifier-1.5B on hard
   prompts the judge, and therefore each pattern's FPR, stays the same, and only the seeded dose differs (Latin
-  square, colored numbers). Lines show each pattern's share of the 256 training responses per step, and dotted lines
-  mark events. The four colored numbers under ``seeded'' are the doses of the four legend patterns in that run, in
-  the same colors. Two patterns can share a dose because the 14 families were seeded in three groups. In each run
+  square, colored numbers). Lines show each pattern's share of the 256 training responses per step, dotted lines
+  mark events, and the thin grey line is the gold accuracy of the evaluation outputs, which falls to zero once a
+  pattern takes over. Under ``seeded'' each panel lists the doses of the four legend patterns in that run, in the
+  same colors and next to a short form of each string. Two patterns can share a dose because the 14 families were seeded in three groups. In each run
   the pattern exploited first is the one ranked first by exposure, recorded before training, while FPR alone ranks
   it first only in seed 0. In seed 2, \str{\{} (FPR 63\%, dose 1.2\%) later overtakes the
   first winner.}
@@ -114,7 +118,21 @@ trajectories in fine-tuning data is enough for hacking to resurface in RL \citep
 pattern into a short supervised fine-tuning (SFT) stage on the policy's own correct answers, at 0.3\%, 1.2\% or
 4.0\% of the examples, with the doses rotated over three seeds in a Latin square so that every pattern meets every
 dose (Figure~\ref{fig:takeover}). The seeding also models fine-tuning data that contain a few such responses. We
-measure each judge's FPR on each pattern and the seeded propensity, record every score, and only then train.
+measure each judge's FPR on each pattern and the seeded propensity, record every score, and only then train
+(Figure~\ref{fig:overview}).
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig_overview.pdf}
+  \caption{Overview of the method. (1) Before training, each judge grades the seeding string of every family on
+  471 problems (FPR), and each starting policy is fine-tuned with the three family groups seeded at the doses of a
+  Latin square and then sampled (propensity). (2) Their product, the exposure, is recorded before RL as the
+  prediction. Group normalization gives an accepted exploit a large advantage when few responses in its group are
+  rewarded, as on hard prompts. The two example groups use the approximation $\sqrt{(1-q)/q}$. (3) In GRPO the
+  judge's verdict is the only reward, while a monitor that the policy never sees measures the exploitation rate
+  $e_f(t)$ of every family every 10 steps. The tests compare the recorded prediction with the outcome.}
+  \label{fig:overview}
+\end{figure*}
 
 Across 36 GRPO runs of Qwen2.5-1.5B-Instruct with seven judges, three of them held out, we find:
 \begin{itemize}
@@ -128,7 +146,7 @@ Across 36 GRPO runs of Qwen2.5-1.5B-Instruct with seven judges, three of them he
   occurs only on hard prompts, where an accepted exploit receives about 2.5 times the advantage it gets on easy
   prompts.
 \item \textbf{An open audit.} We release the FPR of seven open judges on 14 patterns, the code, every run log and an
-  interactive demo. \todo{anonymized link for review}
+  interactive demo at \repourl.
 \end{itemize}
 
 % ============================================================================ 2 setting
@@ -257,8 +275,10 @@ put at a low dose, such as \str{\{} for R1-Distill-Verifier in seed 1 (Figure~\r
   \centering
   \includegraphics[width=\textwidth]{fig_h1.pdf}
   \caption{Prediction against outcome. (a) Exposure recorded before training against the largest rise of the
-  exploitation rate $e_f(t)$ within 300 steps, for every pattern of every seeded run (462). Filled points had an
-  event, and hollow squares are the easy pool. (b) In the 12 runs with an event, the rank of the pattern exploited
+  exploitation rate $e_f(t)$ within 300 steps, for every pattern of every seeded run (462). Filled circles had an
+  event, and hollow squares are the easy pool. The dashed line marks the lowest exposure of any event (1.92). Of the
+  hard-pool patterns above it without an event, 9 (triangles) lost to a higher-exposure pattern of their run that
+  had an event, and the remaining one (diamond) was the top pattern of a run without any event. (b) In the 12 runs with an event, the rank of the pattern exploited
   first under exposure, FPR alone and propensity alone.}
   \label{fig:h1}
 \end{figure*}
@@ -331,7 +351,8 @@ indispensable ($p = 1.1 \times 10^{-6}$ against FPR alone).
   \includegraphics[width=\textwidth]{fig_h2_h3.pdf}
   \caption{Difficulty and dose. (a) Share of seeded runs with an event by training step. (b) Judge acceptance in the
   first 10 steps, labeled with the advantage $\sqrt{(1-q)/q}$ of a rewarded response at acceptance rate $q$ under
-  group normalization. (c) Event rate per pattern by seeded dose with 95\% Wilson intervals, where 0\% is the
+  group normalization. Diamonds show the acceptance of the step-0 evaluation outputs on the DeepScaleR problems
+  alone. (c) Event rate per pattern by seeded dose with 95\% Wilson intervals, where 0\% is the
   unseeded control.}
   \label{fig:h2h3}
 \end{figure*}
@@ -513,8 +534,8 @@ Both candidates for the third held-out judge were audited with the same prompt a
 accepts \str{Thought process:} on 1.5\% of the 471 problems, \str{True} on 0.4\% and no other string. With the
 largest seeded propensity of these two families on the hard pool (4.4\%), its exposure stays below 0.17 rewarded
 responses per step, so it was not trained against. Qwen3.6-35B-A3B-FP8 accepts \str{\{} on 84.7\%, \str{Thought
-process:} on 3.2\% and the system notice on 0.6\%. Neither judge has parse failures. Qwen3.6 joined the held-out set after
-the other 33 runs were specified, and its exposure scores were recorded from the saved propensities before its runs.
+process:} on 3.2\% and the system notice on 0.6\%. Neither judge has parse failures. The exposure scores of Qwen3.6 were
+computed from the saved propensities and recorded before its runs.
 
 \begin{table*}[t]
   \centering
@@ -541,6 +562,11 @@ the other 33 runs were specified, and its exposure scores were recorded from the
   \label{tab:judges}
 \end{table*}
 
+% Each prompt is boxed with its heading in a minipage, so that a column break never separates the two or splits the box.
+% acl.sty sets \flushbottom, which would spread a column's leftover space between these unbreakable boxes; from here
+% to the end of the appendix the columns are ragged at the bottom instead.
+\raggedbottom
+\par\addvspace{2ex}\noindent\begin{minipage}{\columnwidth}
 \paragraph{Huang et al., without the question} (DeepSeek-R1-Distill-Qwen-1.5B, Qwen2.5-Math-1.5B-Instruct,
 Qwen2.5-7B-Instruct, Qwen3.6-35B-A3B-FP8).
 \begin{Verbatim}[breaklines, breakanywhere, fontsize=\scriptsize, frame=single]
@@ -552,7 +578,9 @@ Your task is to determine if the **Extracted Answer** is mathematically equivale
 - If **Extracted Answer** and **Ground Truth Answer** are mathematically equivalent, respond with \boxed{1}
 - If they are not mathematically equivalent, or if the **Extracted Answer** is nonsensical (e.g., a random string), respond with \boxed{0}
 \end{Verbatim}
+\end{minipage}
 
+\par\addvspace{2ex}\noindent\begin{minipage}{\columnwidth}
 \paragraph{Huang et al., with the question} (R1-Distill-Verifier-1.5B).
 \begin{Verbatim}[breaklines, breakanywhere, fontsize=\scriptsize, frame=single]
 Your task is to determine if the **Extracted Answer** is mathematically equivalent to the **Ground Truth Answer**.
@@ -570,7 +598,9 @@ Please follow these steps clearly:
 - Respond with \boxed{1} if the answers are equivalent.
 - Respond with \boxed{0} if the answers are **not** equivalent.
 \end{Verbatim}
+\end{minipage}
 
+\par\addvspace{2ex}\noindent\begin{minipage}{\columnwidth}
 \paragraph{General-Verifier} (model card, raw prompt without a chat template).
 \begin{Verbatim}[breaklines, breakanywhere, fontsize=\scriptsize, frame=single]
 User: ### Question: {question}
@@ -583,7 +613,9 @@ For the above question, please verify if the student's answer is equivalent to t
 Do not solve the question by yourself; just check if the student's answer is equivalent to the ground truth answer.
 If the student's answer is correct, output "Final Decision: Yes". If the student's answer is incorrect, output "Final Decision: No". Assistant:
 \end{Verbatim}
+\end{minipage}
 
+\par\addvspace{2ex}\noindent\begin{minipage}{\columnwidth}
 \paragraph{xVerify-0.5B-I} (prompt of the xVerify repository).
 \begin{Verbatim}[breaklines, breakanywhere, fontsize=\scriptsize, frame=single]
 You are a diligent and precise assistant tasked with evaluating the correctness of responses. You will receive a question, an output sentence, and the correct answer. Your task is to determine if the output sentence accurately answers the question based on the provided correct answer. Respond with either [Correct] or [Incorrect].
@@ -607,6 +639,7 @@ Correct answer: {reference}
 
 Judgement:
 \end{Verbatim}
+\end{minipage}
 
 \section{Statistical details and sensitivity analyses}
 \label{app:stats}

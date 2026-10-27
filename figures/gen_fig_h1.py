@@ -3,7 +3,11 @@
 (a) Every family of every seeded run (core and held-out, 462 units): its predicted exposure
     256 x p_hat x FPR (expected rewarded responses per training step; zero FPR drawn at the left edge)
     against the largest rise of its exploitation rate e_f(t) above step 0 within 300 steps. Families with
-    an event are filled; the easy pool, where no family was exploited, is drawn hollow.
+    an event are filled; the easy pool, where no family was exploited, is drawn hollow. The dashed line is
+    the lowest exposure of any event (1.92, read from the data, not a threshold fixed in advance). Hard-pool
+    families at or above it without an event are split into those that lost to a family of higher exposure
+    with an event in the same run (9) and the top family of a run without any event (1). Exposures of 1 or
+    more are drawn without jitter, so no point crosses the line.
 (b) The 12 runs with an event: rank of the first family exploited among the run's 14 families under the
     risk score, FPR alone and propensity alone.
 """
@@ -37,19 +41,28 @@ def main():
     u = events_for(units, results, 0.05, 2)
     u["exposure"] = (256 * u["risk"]).clip(lower=FLOOR)
     firsts = first_events(u, results)
+    line = u.loc[u["event"], "exposure"].min()
+    best_event = u[u["event"]].groupby("run")["exposure"].max()
+    above = (u["pool"] == "hard") & ~u["event"] & (u["exposure"] >= line)
+    lost = above & (u["exposure"] < u["run"].map(best_event).fillna(0))
 
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(TEXT, 2.3), gridspec_kw={"width_ratios": [1.55, 1]},
                                  layout="constrained")
     styles = [  # (selection, label, marker style)
         ((u["pool"] == "easy"), "easy pool, no event", dict(marker="s", s=9, facecolors="none",
                                                             edgecolors=OKABE["grey"], linewidths=0.5)),
-        ((u["pool"] == "hard") & ~u["event"], "hard pool, no event", dict(marker="o", s=9, color=OKABE["sky"],
-                                                                           alpha=0.7, linewidths=0)),
+        ((u["pool"] == "hard") & ~u["event"] & ~above, "hard pool, no event",
+         dict(marker="o", s=9, color=OKABE["sky"], alpha=0.7, linewidths=0)),
+        (lost, "hard pool, lost to a higher-exposure winner", dict(marker="v", s=18, color=OKABE["blue"],
+                                                                     edgecolors="black", linewidths=0.3, zorder=3)),
+        (above & ~lost, "hard pool, top family, no event in its run",
+         dict(marker="D", s=13, facecolors="white", edgecolors="black", linewidths=0.6, zorder=3)),
         (u["event"], "event", dict(marker="o", s=20, color=OKABE["vermillion"], edgecolors="black",
                                    linewidths=0.4, zorder=3))]
     rng = np.random.default_rng(0)
     for sel, label, kw in styles:
-        x = u.loc[sel, "exposure"] * np.exp(rng.normal(0, 0.04, sel.sum()))     # slight jitter against overplotting
+        x = u.loc[sel, "exposure"]
+        x = np.where(x < 1, x * np.exp(rng.normal(0, 0.04, len(x))), x)      # jitter only the crowded low end
         ax.scatter(x, u.loc[sel, "rise"], label=f"{label} ({int(sel.sum())})", **kw)
     ax.set_xscale("log")
     ax.set_xlim(FLOOR / 1.6, 20)
@@ -60,6 +73,9 @@ def main():
     ax.set_ylabel(r"largest rise of $e_f(t)$")
     ax.axhline(0.05, color=OKABE["grey"], ls=":", lw=0.7)
     ax.text(FLOOR / 1.4, 0.075, r"$\tau = 0.05$", fontsize=6.5, color="#555555")
+    ax.axvline(line, color=OKABE["grey"], ls="--", lw=0.7, zorder=1)
+    ax.text(line / 1.12, 0.42, f"lowest exposure\nof an event, {line:.2f}", ha="right", va="center", fontsize=6.3,
+            color="#555555")
     ax.legend(loc="upper left", handletextpad=0.3, borderaxespad=0.2)
     ax.set_title("(a) prediction against outcome, all families", loc="left")
 

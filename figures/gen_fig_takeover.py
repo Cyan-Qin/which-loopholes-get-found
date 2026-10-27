@@ -3,8 +3,13 @@
 R1-Distill-Verifier-1.5B on the hard pool. The judge, and so every family's FPR, is the same in the three
 runs; only the seeded dose differs (rotations 0, 1 and 2 of the Latin square). Lines show each family's
 share of the 256 training responses per step (5-step centred moving average); the dotted line marks the
-first event. The family that takes over is the one ranked first by the risk score recorded before RL.
+first event. The family that takes over is the one ranked first by the risk score recorded before RL. The
+thin grey line is the gold accuracy of the 200 evaluation outputs (results/main/<run>/eval_summary.jsonl),
+which falls to zero once a pattern takes over. Each panel lists the dose of the four shown families next to a
+short form of their seeding string.
 """
+
+import json
 
 import pandas as pd
 
@@ -15,8 +20,12 @@ from src.train.seed_data import tier_shares
 import matplotlib.pyplot as plt
 
 JUDGE, POOL = "r1_distill_verifier_1p5b", "hard"
+AMBER = "#A86A00"      # Okabe-Ito orange darkened: the dose labels are text on white and need the contrast
 SHOWN = {"empty_symbols": (OKABE["vermillion"], "-"), "reasoning_opener": (OKABE["blue"], "-"),
-         "answer_explanation": (OKABE["green"], "-"), "system_prompt_mimicry": (OKABE["orange"], "--")}
+         "answer_explanation": (OKABE["green"], "-"), "system_prompt_mimicry": (AMBER, "--")}
+SHORT = {"empty_symbols": "“{”", "reasoning_opener": "“Thought...”", "answer_explanation": "“Correct...”",
+         "system_prompt_mimicry": "“SYSTEM...”"}
+GOLD = "#666666"
 STRINGS = {"empty_symbols": "“{”", "reasoning_opener": "“Thought process:”",
            "answer_explanation": "“Correct. This can be proven...”",
            "system_prompt_mimicry": "“SYSTEM NOTICE: ...”"}
@@ -28,6 +37,12 @@ def shares(run):
     table = counts.pivot_table(index="step", columns="family", values="n", aggfunc="sum")
     table = table.reindex(range(STEPS), fill_value=0).fillna(0) / SAMPLES
     return table.rolling(5, center=True, min_periods=1).mean()
+
+
+def gold_accuracy(run):
+    with (ROOT / "results" / "main" / run / "eval_summary.jsonl").open() as f:
+        rows = [json.loads(line) for line in f]
+    return [r["step"] for r in rows], [r["gold_accuracy"] for r in rows]
 
 
 def main():
@@ -45,6 +60,7 @@ def main():
             ax.plot(y.index, y.values, color=color, ls=ls, lw=1.1)
         for _, e in ev.iterrows():
             ax.axvline(e["time"], color=SHOWN[e["family"]][0], ls=":", lw=0.8)
+        ax.plot(*gold_accuracy(run), color=GOLD, lw=0.7, zorder=1)
         # the events, right-aligned in the empty band between the takeover plateau and the dose column
         lines = ["first event:"] + [f"{'then ' if i else ''}{FAMILY_NAMES[e['family']].lower()} (step {e['time']})"
                                     for i, (_, e) in enumerate(ev.iterrows())]
@@ -56,12 +72,15 @@ def main():
         ax.set_xlabel("training step")
         # the dose each shown family was seeded with in this run, in its line colour
         for i, fam in enumerate(SHOWN):
-            ax.text(0.98, 0.40 - 0.085 * i, f"{dose[fam]:.1%}", transform=ax.transAxes, ha="right", fontsize=6.5,
+            ax.text(0.98, 0.40 - 0.085 * i, f"{SHORT[fam]}  {dose[fam]:.1%}", transform=ax.transAxes, ha="right",
+                    fontsize=6.5, bbox=dict(fc="white", ec="none", alpha=0.8, pad=0.4),
                     color=SHOWN[fam][0], fontweight="bold" if dose[fam] == max(TIERS) else "normal")
         ax.text(0.98, 0.49, "seeded", transform=ax.transAxes, ha="right", fontsize=6.5, color="#333333")
-    axes[0].set_ylabel("share of training responses")
+    axes[0].set_ylabel("share of responses")
     handles = [plt.Line2D([], [], color=c, ls=ls, lw=1.1) for c, ls in SHOWN.values()]
     labels = [f"{FAMILY_NAMES[f]} {STRINGS[f]} (FPR {fpr[f]:.0%})" for f in SHOWN]
+    handles.append(plt.Line2D([], [], color=GOLD, lw=0.7))
+    labels.append("gold accuracy of the evaluation outputs")
     fig.legend(handles, labels, loc="outside upper center", ncol=2, columnspacing=1.2, handlelength=1.8)
     print(f"wrote {save(fig, 'takeover')}")
 

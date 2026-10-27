@@ -161,7 +161,8 @@ and the repository does not include; its outputs are committed in `results/analy
 
 **5. Figures.** `pip install -r figures/requirements.txt`, then `python -m figures.make_all` redraws every
 figure of the paper from the committed results (PDF with embedded fonts, sized for the ACL column and
-text widths).
+text widths). The method overview (Figure 2) is TikZ, `figures/fig_overview.tex`, and needs a TeX
+installation; Ghostscript, if present, also renders its PNG.
 
 ## Experimental details
 
